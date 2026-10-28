@@ -1,15 +1,77 @@
 {% extends "app/base.html" %}
 {% block title %}{{ meta.rec_id }} · Teach-Once{% endblock %}
 {% block content %}
+<style>
+  .stages { list-style: none; padding: 0; margin: 10px 0 0; }
+  .stages li { padding: 3px 0; }
+  .stages li::before { content: "✓ "; color: var(--ok); }
+  .stages li.active::before { content: "● "; color: var(--accent); }
+  .stages li.error { color: var(--rec); }
+  .stages li.error::before { content: "✗ "; color: var(--rec); }
+  .var { background: #1f3326; color: var(--ok); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  pre { background: #0b0d12; border: 1px solid var(--line); border-radius: 6px; padding: 12px; overflow: auto; max-height: 460px; font-size: 12px; }
+</style>
 <h1>Recording {{ meta.rec_id }}</h1>
-<p class="muted">{{ meta.started_at }} · {{ '%.1f' % (meta.duration_ms / 1000) }} s · {{ events|length }} steps captured · drift level {{ meta.drift_level }}</p>
+<p class="muted">{{ meta.started_at }} · {{ '%.1f' % (meta.duration_ms / 1000) }} s · {{ events|length }} events · drift level {{ meta.drift_level }}</p>
+
+<div class="card">
+  <div style="display:flex;align-items:center;gap:14px">
+    <h2 style="font-size:16px;margin:0">Compile</h2>
+    <button class="btn" id="compile">{{ 'Recompile' if compiled else 'Compile workflow' }}</button>
+    {% if compiled %}<span class="muted">{{ compiled.workflow }} · {{ compiled.seconds }} s · ${{ '%.3f' % compiled.cost_usd }}</span>{% endif %}
+  </div>
+  <p class="muted" style="margin:8px 0 0">Voice Transcribe → Muse Spark (video + events + narration) → Muse Wonder (workflow) → dry run on the portal → Wonder export script.</p>
+  <ul class="stages" id="stages"></ul>
+</div>
+
 <div class="card">
   <video src="/app/recordings/{{ meta.rec_id }}/teach.mp4" controls style="width:100%;max-height:520px;background:#000"></video>
   {% if meta.has_narration %}
-  <p class="muted" style="margin:10px 0 4px">Narration (24 kHz mono, what Voice Transcribe gets)</p>
-  <audio src="/app/recordings/{{ meta.rec_id }}/narration.wav" controls style="width:100%"></audio>
-  {% else %}<p class="muted">No narration was recorded.</p>{% endif %}
+  <audio src="/app/recordings/{{ meta.rec_id }}/narration.wav" controls style="width:100%;margin-top:10px"></audio>
+  {% endif %}
+  {% if turns %}
+  <table style="margin-top:10px">{% for t in turns %}<tr><td class="mono" style="width:110px">{{ '%.1f' % (t.startMs / 1000) }}–{{ '%.1f' % (t.endMs / 1000) }}s</td><td>{{ t.transcript }}</td></tr>{% endfor %}</table>
+  {% elif meta.has_narration %}<p class="muted">No speech was recognised in the narration.</p>{% endif %}
 </div>
+
+{% if graph %}
+<div class="card">
+  <h2 style="font-size:16px;margin:0 0 4px">What Muse Spark understood: {{ graph.task_name }}</h2>
+  <p class="muted" style="margin:0 0 10px">{{ graph.task_summary }}</p>
+  <table>
+    <tr><th>#</th><th>Intent</th><th>Variable</th><th>SAM noun phrase</th><th>Why</th></tr>
+    {% for s in graph.steps %}
+    <tr><td>{{ s.event_idx }}</td><td>{{ s.intent }}</td>
+        <td>{% if s.is_variable %}<span class="chip var">{{ s.variable_name }}</span>{% endif %}</td>
+        <td class="mono">{{ s.target_noun_phrase }}</td><td class="muted">{{ s.variable_reason if s.is_variable else '' }}</td></tr>
+    {% endfor %}
+  </table>
+  {% if graph.outputs %}<p style="margin:10px 0 0">Outputs: {% for o in graph.outputs %}<span class="chip">{{ o.name }}</span> {% endfor %}</p>{% endif %}
+</div>
+{% endif %}
+
+{% if workflow %}
+<div class="card">
+  <h2 style="font-size:16px;margin:0 0 10px">Workflow compiled by Muse Wonder: {{ workflow.id }}.v{{ workflow.version }}
+    <a class="muted" style="font-size:13px;font-weight:400" href="/app/workflows/{{ compiled.workflow }}">json</a></h2>
+  <table>
+    <tr><th>Step</th><th>Action</th><th>Value</th><th>First locator</th><th>Check</th></tr>
+    {% for s in workflow.steps %}
+    {% set loc = s.target.locators[0] if s.target else None %}
+    <tr><td>{{ s.id }}</td><td><span class="chip">{{ s.action }}</span></td>
+        <td class="mono">{% if s.value and '{{' in s.value %}<span class="chip var">{{ s.value }}</span>{% else %}{{ s.value or s.output or '' }}{% endif %}</td>
+        <td class="mono">{% if loc %}{{ loc.kind }}: {{ loc.role or '' }} {{ loc.name or loc.text or loc.selector }}{% endif %}</td>
+        <td class="mono">{{ s.check.kind if s.check.kind != 'none' else '' }} {{ s.check.value or '' }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<div class="card">
+  <h2 style="font-size:16px;margin:0 0 10px">Standalone Playwright script (Muse Wonder) <a class="muted" style="font-size:13px;font-weight:400" href="/app/workflows/{{ compiled.export }}">{{ compiled.export }}</a></h2>
+  <pre>{{ export_code }}</pre>
+</div>
+{% endif %}
+
 <div class="card">
   <h2 style="font-size:16px;margin:0 0 10px">Captured events</h2>
   <table>
@@ -26,4 +88,37 @@
     {% endfor %}
   </table>
 </div>
+
+<script>
+  const recId = {{ meta.rec_id | tojson }};
+  const list = document.getElementById("stages");
+  const button = document.getElementById("compile");
+  function show(job) {
+    list.innerHTML = "";
+    job.stages.forEach((s, i) => {
+      const li = document.createElement("li");
+      li.textContent = s;
+      if (job.state === "running" && i === job.stages.length - 1) li.className = "active";
+      list.appendChild(li);
+    });
+    if (job.error) {
+      const li = document.createElement("li");
+      li.className = "error";
+      li.textContent = job.error;
+      list.appendChild(li);
+    }
+    button.disabled = job.state === "running";
+  }
+  async function poll() {
+    const job = await (await fetch(`/app/api/teach/${recId}/compile`)).json();
+    show(job);
+    if (job.state === "running") setTimeout(poll, 1000);
+    else if (job.state === "done") location.reload();
+  }
+  button.addEventListener("click", async () => {
+    show(await (await fetch(`/app/api/teach/${recId}/compile`, { method: "POST" })).json());
+    poll();
+  });
+  {% if job and job.state == 'running' %}poll();{% elif job %}show({{ job | tojson }});{% endif %}
+</script>
 {% endblock %}

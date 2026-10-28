@@ -17,6 +17,10 @@
 | `run.py` | The batch interpreter: runs a workflow over CSV rows with no model calls on the happy path. |
 | `recording.py` | Saves a teach recording, cleans up raw DOM events, converts media with ffmpeg. |
 | `static/recorder.js` + `templates/app/studio.html` | The teach studio: recording toolbar + the portal in a same-origin frame. |
+| `teach.py` | The teach pipeline: cleans the recording, then transcribe → understand → compile → dry run → export. |
+| `understand.py` | Muse Spark watches the teach video with the event log and narration and returns a step graph. |
+| `compiler.py` | Muse Wonder turns the recorded skeleton + step graph into a workflow; lint, repair, export script. |
+| `prompts.py` | All prompts, with version tags that are logged with each call. |
 
 ## Meta Model API notes
 
@@ -73,6 +77,22 @@ A recording lands in `data/recordings/<rec_id>/`:
 - `meta.json`: start time, duration, frame geometry, drift level, whether there was narration.
 
 `/app/teach/<rec_id>` shows the video, narration and captured events.
+
+## Teach pipeline (recording → workflow)
+
+`uv run teach.py <rec_id>` (or **Compile workflow** on `/app/teach/<rec_id>`). The portal must be running, because the last stage replays the draft on it. Stages:
+
+1. **Final pass** (no model): a click that lands back on the same page was a failed submit (validation error), so it is dropped, and fields re-entered afterwards update the original step. Mistakes made while teaching don't end up in the workflow.
+2. **Transcribe** (Voice Transcribe): narration → timestamped turns, with the field labels as keywords. Keywords over 30 characters are rejected by the API, so they are filtered out. No narration is fine.
+3. **Understand** (Muse Spark, reasoning effort high): the 720p/10 fps video + the event table + the narration → a step graph: intent, per-row variable or constant (with the reason), a visual description and a short SAM noun phrase per target, and the task's outputs. The event log is the ground truth for actions; Spark adds meaning. Cached in `step_graph.json`.
+4. **Compile** (Muse Wonder, effort medium): a deterministic skeleton (one entry per action, with locator candidates built from what the recorder saw) + the step graph + the CSV columns → a workflow under a strict JSON schema. It maps variables to CSV columns, templates values, turns masked passwords into secrets, adds checks and an extract step per output.
+5. **Lint** (no model): one step per recorded action, an extract per output, no CSS selector that wasn't recorded, every `{{var}}` declared, every column in the CSV. Problems go back to Wonder for one repair call.
+6. **Dry run**: the draft runs at drift 0 on the recorded example **plus the first CSV rows**, which catches workflows that only fit the example (e.g. a regex that doesn't allow "3,025.00"). A failure goes back to Wonder with the error for one repair call.
+7. **Export** (Muse Wonder, effort low): a standalone Playwright script (`workflows/export_<id>.py`) with the same steps, as the visible "compiled program". It reads secrets from the environment (`PORTAL_PASSWORD=demo123 python workflows/export_<id>.py data/rows.csv`).
+
+The workflow is saved as `workflows/<id>.v<N>.json`; the recording folder gets the drafts, `examples.csv` and `compiled.json` (cost, time, file names).
+
+Measured on a real 100 s recording: Spark ~37 s / $0.06 (26k input tokens), Wonder compile ~20 s / $0.13–0.16, export ~18 s / $0.09. About $0.25–0.40 per teach.
 
 ## Record/replay cache
 

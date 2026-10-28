@@ -31,7 +31,9 @@ Add `?drift=1`, `2` or `3` to any portal URL to see the site "redesigned".
 
 To teach a task, open http://localhost:8000/app/teach/new in Chrome, click **Start teaching**, share this tab and the microphone, do the task in the portal while narrating, then click **Stop**.
 
-With the portal running, run the workflow over the 50 rows in another terminal:
+On the recording page, click **Compile workflow**: Voice Transcribe, Muse Spark and Muse Wonder turn the recording into `workflows/<id>.v1.json` (and a standalone Playwright script), dry-run it on the portal, and show what they understood.
+
+With the portal running, run a workflow over the 50 rows in another terminal:
 
 ```bash
 uv run run.py workflows/pay-interstate-tax.v1.json data/rows.csv

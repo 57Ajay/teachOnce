@@ -43,7 +43,7 @@ def row_values(wf: Workflow, row: dict) -> dict:
     return values
 
 
-def verify(page: Page, step: Step, el, value: str | None, values: dict):
+def verify(page: Page, step: Step, el, value: str | None, values: dict, hidden: set):
     c = step.check
     expected = workflow.render(c.value, values) if c.value else None
     try:
@@ -51,7 +51,9 @@ def verify(page: Page, step: Step, el, value: str | None, values: dict):
             case "value_equals":
                 actual = el.evaluate(READ_VALUE_JS).strip()
                 if actual != value:
-                    raise StepFailed("check_failed", f"value is {actual!r}, expected {value!r}")
+                    shown = "the secret" if value in hidden else repr(value)
+                    raise StepFailed("check_failed", f"value does not match {shown}" if value in hidden
+                                     else f"value is {actual!r}, expected {shown}")
             case "url_contains":
                 expect(page).to_have_url(re.compile(re.escape(expected)), timeout=step.timeout_ms)
             case "text_visible":
@@ -66,7 +68,7 @@ def verify(page: Page, step: Step, el, value: str | None, values: dict):
         raise StepFailed("check_failed", str(e).splitlines()[0]) from e
 
 
-def execute(page: Page, step: Step, values: dict, outputs: dict):
+def execute(page: Page, step: Step, values: dict, outputs: dict, hidden: set = frozenset()):
     value = workflow.render(step.value, values) if step.value is not None else None
     el = None
     if step.target:
@@ -105,11 +107,12 @@ def execute(page: Page, step: Step, values: dict, outputs: dict):
     except PlaywrightError as e:
         kind = "blocked_by_overlay" if "intercepts pointer events" in str(e) else "action_failed"
         raise StepFailed(kind, str(e).splitlines()[0]) from e
-    verify(page, step, el, value, values)
+    verify(page, step, el, value, values, hidden)
 
 
 def run_row(browser, wf: Workflow, row_idx: int, row: dict, run_dir: Path, emit, shoot_all: bool) -> dict:
     values = row_values(wf, row)
+    hidden = {values[s.name] for s in wf.secrets}
     context = browser.new_context(viewport=VIEWPORT, device_scale_factor=1)
     page = context.new_page()
     start, calls_before, usd_before = time.monotonic(), meta_client.stats["calls"], cost.spent_usd()
@@ -123,7 +126,7 @@ def run_row(browser, wf: Workflow, row_idx: int, row: dict, run_dir: Path, emit,
 
     for i, step in enumerate(wf.steps):
         try:
-            execute(page, step, values, outputs)
+            execute(page, step, values, outputs, hidden)
         except StepFailed as e:
             if step.optional:
                 emit("step_skipped", row=row_idx, step=step.id)

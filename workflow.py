@@ -101,6 +101,13 @@ def latest(workflow_id: str) -> Path:
     return versions[-1]
 
 
+def next_version(workflow_id: str) -> int:
+    try:
+        return int(latest(workflow_id).stem.rsplit(".v", 1)[1]) + 1
+    except FileNotFoundError:
+        return 1
+
+
 def save(wf: Workflow) -> Path:
     """Write a new version file. Version files are immutable."""
     path = path_for(wf.id, wf.version)

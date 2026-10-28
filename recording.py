@@ -1,5 +1,6 @@
 """Teach recordings: save the uploaded bundle, clean up raw DOM events, convert media for the models."""
 import json
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,11 @@ import config
 REC_DIR = config.DATA_DIR / "recordings"
 FIELD_TAGS = {"input", "select", "textarea"}
 BUTTON_TYPES = {"submit", "button", "reset", "image"}
+
+
+def strip_required(name: str) -> str:
+    """Accessible names include the trailing " *" of required fields."""
+    return re.sub(r"\s*\*$", "", name or "")
 
 
 def is_field(target: dict) -> bool:
