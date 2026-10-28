@@ -1,0 +1,18 @@
+{% extends "app/base.html" %}
+{% block content %}
+<h1>Teach a web task once. Run it at scale.</h1>
+<p class="muted">Record the task while narrating it. Meta's models compile it into a workflow that runs with zero model calls and heals itself when the site changes.</p>
+<p><a class="btn" href="/app/teach/new">● Teach a new task</a></p>
+<div class="card">
+  <h2 style="font-size:16px;margin:0 0 10px">Recordings</h2>
+  {% if recordings %}
+  <table>
+    <tr><th>Recording</th><th>Started</th><th>Length</th><th>Narration</th></tr>
+    {% for m in recordings %}
+    <tr><td><a href="/app/teach/{{ m.rec_id }}">{{ m.rec_id }}</a></td><td>{{ m.started_at }}</td>
+        <td>{{ '%.1f' % (m.duration_ms / 1000) }} s</td><td>{{ 'yes' if m.has_narration else 'no' }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No recordings yet.</p>{% endif %}
+</div>
+{% endblock %}

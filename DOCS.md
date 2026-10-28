@@ -9,12 +9,14 @@
 | `meta_client.py` | Thin HTTP client for the Meta Model API: `responses`, `structured`, `upload_file`, `transcribe`. Retries, record/replay cache, logs every call's cost. |
 | `sam.py` | SAM 3.1 request + output parsing into `Detection(box, confidence, mask)`, best match first. |
 | `check_api.py` | Smoke test: one cheap call to Spark (structured output), SAM and Voice Transcribe. |
-| `app.py` | The single FastAPI app. Serves the portal under `/portal/*` (and the Teach-Once app under `/app/*` later), so everything is same-origin. |
+| `app.py` | The single FastAPI app: the portal under `/portal/*`, Teach-Once under `/app/*`, so everything is same-origin. |
 | `portal.py` + `templates/portal/` | The Demoland TransitPass Portal, the fictional demo target, with drift levels. |
 | `gen_data.py` | Writes fake CSV rows (`data/rows.csv`) that pass the portal's validation. |
 | `workflow.py` | Workflow models (pydantic), `{{var}}` templating, immutable versioned files in `workflows/`. |
 | `locate.py` | Resolves a target's locator chain to exactly one visible, enabled element. |
 | `run.py` | The batch interpreter: runs a workflow over CSV rows with no model calls on the happy path. |
+| `recording.py` | Saves a teach recording, cleans up raw DOM events, converts media with ffmpeg. |
+| `static/recorder.js` + `templates/app/studio.html` | The teach studio: recording toolbar + the portal in a same-origin frame. |
 
 ## Meta Model API notes
 
@@ -56,6 +58,22 @@ A target carries a **locator chain**, most robust first (role + accessible name,
 
 `workflows/pay-interstate-tax.v1.json` is hand-written for now; the teach pipeline will generate these.
 
+## Teaching (the recorder)
+
+Open `/app/teach/new`. The studio shows a toolbar and the portal in a 1280×800 frame (the runner's viewport). **Start teaching** asks to share the tab and the microphone, signs the portal out, and starts recording. Do the task in the frame while saying what you're doing; **Stop** uploads everything.
+
+Why a studio page instead of injecting a script into the portal: the portal is multi-page, and every navigation would kill an injected script together with its screen and mic recorders. The studio page never navigates; because the frame is same-origin, it attaches capture-phase listeners to each page the frame loads.
+
+A recording lands in `data/recordings/<rec_id>/`:
+
+- `events_raw.jsonl`: every click / change / submit / Enter, with the element's role, accessible name, label, placeholder, id, name, a unique CSS path, XPath and bounding box (frame CSS pixels). Password values are stored as `***`. A typed field is timestamped when typing started.
+- `events.jsonl`: one event per user intent, each with an `action` (`fill`, `fill_date`, `select`, `check`, `uncheck`, `click`, `press`, `navigation`). Focus clicks on fields, label clicks, Tab presses and submits caused by the preceding click/Enter are dropped.
+- `teach.mp4`: the tab video cropped to the portal frame, 720p, 10 fps, no audio (for Muse Spark).
+- `narration.wav`: mono, 16-bit, 24 kHz (for Voice Transcribe).
+- `meta.json`: start time, duration, frame geometry, drift level, whether there was narration.
+
+`/app/teach/<rec_id>` shows the video, narration and captured events.
+
 ## Record/replay cache
 
 `META_CACHE` in `.env`:
@@ -66,6 +84,6 @@ A target carries a **locator chain**, most robust first (role + accessible name,
 
 ## Tests
 
-The portal tests drive a real Chromium. On a fresh machine run `uv run playwright install chromium` once. In an environment with its own Chromium, set `CHROMIUM_PATH` in `.env`.
+The portal, runner and studio tests drive a real Chromium (the studio test uses Chromium's fake camera/mic/tab-capture flags). On a fresh machine run `uv run playwright install chromium` once. In an environment with its own Chromium, set `CHROMIUM_PATH` in `.env`.
 
 `uv run pytest` runs offline. Tests that hit the real API are marked `live` and skipped by default (`uv run pytest -m live` to run them).

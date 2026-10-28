@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Teach · Teach-Once</title>
+<style>
+  :root { --bg: #0f1115; --panel: #171a21; --line: #2a2f3a; --text: #e6e8ec; --muted: #9aa3b2; --accent: #7c9cff; --rec: #ff4d4f; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .bar { height: 52px; display: flex; align-items: center; gap: 14px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .bar a { color: var(--text); font-weight: 700; text-decoration: none; }
+  button { border: 0; border-radius: 6px; padding: 7px 14px; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  #start { background: var(--rec); color: #fff; }
+  #stop { background: #e6e8ec; color: #111; }
+  #timer { font-family: ui-monospace, monospace; min-width: 48px; }
+  .meter { width: 90px; height: 8px; background: #262b36; border-radius: 4px; overflow: hidden; }
+  #meter { height: 100%; width: 0; background: #3ccf91; transition: width .08s; }
+  #status { color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #444; }
+  body.recording .dot { background: var(--rec); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .stage { display: flex; justify-content: center; padding: 8px; }
+  iframe { box-sizing: content-box; width: 1280px; height: 800px; border: 1px solid var(--line); background: #fff; flex: none; }
+  #small { display: none; color: #ffcc66; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <a href="/app/">Teach-Once</a>
+  <span class="dot"></span>
+  <button id="start">● Start teaching</button>
+  <button id="stop" disabled>■ Stop</button>
+  <span id="timer">00:00</span>
+  <span class="meter" title="Microphone level"><div id="meter"></div></span>
+  <span id="status">Click Start, share this tab, then do the task in the portal below while saying what you're doing.</span>
+  <span id="small">Window too small: maximise it or zoom out (Ctrl -).</span>
+</div>
+<div class="stage"><iframe id="portal" src="/portal/login" title="Demoland TransitPass Portal"></iframe></div>
+<script>
+  const fit = () => (document.getElementById("small").style.display = innerWidth < 1300 || innerHeight < 870 ? "inline" : "none");
+  addEventListener("resize", fit); fit();
+</script>
+<script src="/static/recorder.js"></script>
+</body>
+</html>

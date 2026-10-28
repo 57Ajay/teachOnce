@@ -15,7 +15,7 @@ Built for the Meta Global AI Developer Hackathon. Work in progress.
 
 ## Quick start
 
-Requires [uv](https://docs.astral.sh/uv/) and `ffmpeg`.
+Requires [uv](https://docs.astral.sh/uv/), `ffmpeg` and Chrome/Chromium.
 
 ```bash
 cp .env.example .env   # add your META_API_KEY
@@ -28,6 +28,8 @@ uv run uvicorn app:app --port 8000
 
 Then open http://localhost:8000/portal/login (demo login `operator` / `demo123`).
 Add `?drift=1`, `2` or `3` to any portal URL to see the site "redesigned".
+
+To teach a task, open http://localhost:8000/app/teach/new in Chrome, click **Start teaching**, share this tab and the microphone, do the task in the portal while narrating, then click **Stop**.
 
 With the portal running, run the workflow over the 50 rows in another terminal:
 

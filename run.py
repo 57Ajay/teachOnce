@@ -152,6 +152,8 @@ def run_row(browser, wf: Workflow, row_idx: int, row: dict, run_dir: Path, emit,
 def run(workflow_path, csv_path, start_row: int = 0, limit: int | None = None, headless: bool = True,
         run_id: str | None = None, on_event=None) -> dict:
     wf = workflow.load(workflow_path)
+    if not Path(csv_path).exists():
+        raise SystemExit(f"{csv_path} not found. Generate fake rows with: uv run gen_data.py")
     with open(csv_path, newline="") as f:
         rows = list(csv.DictReader(f))
     rows = rows[start_row:start_row + limit if limit else None]
