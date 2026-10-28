@@ -1,0 +1,7 @@
+[project]
+name = "teach-once"
+version = "0.1.0"
+description = "Teach a web task once, run it at scale, and let it heal itself when the site changes."
+requires-python = ">=3.14"
+license = "MIT"
+dependencies = []

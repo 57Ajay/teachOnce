@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude/
+data/
+*.mp4
+*.wav
+*.webm
+
+# docs stay local, except these two
+*.md
+!README.md
+!DOCS.md
