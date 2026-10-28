@@ -16,6 +16,8 @@ TRANSCRIBE = "muse-voice-transcribe-1.0"
 RETRY_STATUS = {429, 500, 502, 503, 504}
 MAX_ATTEMPTS = 5
 
+stats = {"calls": 0}
+
 
 class MetaAPIError(RuntimeError):
     pass
@@ -28,6 +30,7 @@ def _cassette(key: list) -> Path:
 
 def _post(path: str, key: list, timeout: float, **kwargs) -> tuple[dict, int | None]:
     """Return (body, latency_ms). latency_ms is None when served from a cassette."""
+    stats["calls"] += 1
     cassette = _cassette(key)
     if config.META_CACHE in ("record", "replay") and cassette.exists():
         return json.loads(cassette.read_text()), None

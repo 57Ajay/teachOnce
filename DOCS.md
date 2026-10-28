@@ -12,6 +12,9 @@
 | `app.py` | The single FastAPI app. Serves the portal under `/portal/*` (and the Teach-Once app under `/app/*` later), so everything is same-origin. |
 | `portal.py` + `templates/portal/` | The Demoland TransitPass Portal, the fictional demo target, with drift levels. |
 | `gen_data.py` | Writes fake CSV rows (`data/rows.csv`) that pass the portal's validation. |
+| `workflow.py` | Workflow models (pydantic), `{{var}}` templating, immutable versioned files in `workflows/`. |
+| `locate.py` | Resolves a target's locator chain to exactly one visible, enabled element. |
+| `run.py` | The batch interpreter: runs a workflow over CSV rows with no model calls on the happy path. |
 
 ## Meta Model API notes
 
@@ -38,6 +41,20 @@ A deliberately ordinary government-style flow: `/portal/login` → dashboard →
 | 3 | Level 2 + a cookie-consent modal blocking every page until accepted, and a "Session notice" page before review. |
 
 The server reads fields through the same rename map, and each form posts the layout it was rendered with (`_layout`), so a form opened before a mid-run drift switch still submits.
+
+## Workflows and the runner
+
+A workflow (`workflows/<id>.v<N>.json`) is a list of steps. Each step has an `action` (`goto`, `click`, `fill`, `fill_date`, `select`, `check`, `uncheck`, `press`, `wait_for`, `extract`, `assert_text`), an optional `target`, a templated `value`, and a `check` that proves it worked (`value_equals`, `url_contains`, `text_visible`, `element_visible`, `element_hidden`). Values and locator text can use `{{variable}}` (CSV columns), `{{secret}}` (env vars) and `{{PORTAL_URL}}`.
+
+A target carries a **locator chain**, most robust first (role + accessible name, label, placeholder, text, CSS). The runner polls the chain until one locator matches exactly one visible, enabled element. That is why cosmetic drift (renamed ids) often needs no heal: the role/label locators still match.
+
+`uv run run.py workflows/pay-interstate-tax.v1.json data/rows.csv [--start N] [--limit N] [--headed]`
+
+- Rows run sequentially, one fresh browser context per row (clean cookies, so per-row popups behave like a new visitor). Viewport 1280×800, device scale factor 1, so screenshot pixels equal CSS pixels.
+- A failing step stops the row with a typed failure: `locator_not_found`, `blocked_by_overlay` (the click hit another element, e.g. a modal), `check_failed` or `action_failed`. Steps marked `optional` are skipped on failure.
+- Output goes to `data/runs/<run_id>/`: `results.jsonl` (one line per row: status, outputs, duration, model calls, cost), `events.jsonl` (the event stream the dashboard will use), `summary.json`, and `steps/*.png` screenshots (every step of the first row, every failure, every row's last step).
+
+`workflows/pay-interstate-tax.v1.json` is hand-written for now; the teach pipeline will generate these.
 
 ## Record/replay cache
 

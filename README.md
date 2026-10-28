@@ -29,6 +29,12 @@ uv run uvicorn app:app --port 8000
 Then open http://localhost:8000/portal/login (demo login `operator` / `demo123`).
 Add `?drift=1`, `2` or `3` to any portal URL to see the site "redesigned".
 
+With the portal running, run the workflow over the 50 rows in another terminal:
+
+```bash
+uv run run.py workflows/pay-interstate-tax.v1.json data/rows.csv
+```
+
 Developer notes are in [DOCS.md](DOCS.md).
 
 ## License
