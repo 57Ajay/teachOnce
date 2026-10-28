@@ -4,4 +4,19 @@ version = "0.1.0"
 description = "Teach a web task once, run it at scale, and let it heal itself when the site changes."
 requires-python = ">=3.14"
 license = "MIT"
-dependencies = []
+dependencies = [
+    "httpx>=0.28.1",
+    "meta-sam-parser>=0.1.0",
+    "python-dotenv>=1.2.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = ["live: calls the real Meta API (costs money)"]
