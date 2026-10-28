@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Teach-Once{% endblock %}</title>
+<style>
+  :root { --bg: #0f1115; --panel: #171a21; --line: #2a2f3a; --text: #e6e8ec; --muted: #9aa3b2; --accent: #7c9cff; --rec: #ff4d4f; --ok: #3ccf91; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  a { color: var(--accent); }
+  header { display: flex; align-items: center; gap: 18px; padding: 12px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header .brand { font-weight: 700; letter-spacing: .02em; text-decoration: none; color: var(--text); }
+  header nav a { color: var(--muted); text-decoration: none; margin-right: 14px; }
+  main { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .muted { color: var(--muted); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; margin-bottom: 18px; }
+  .btn { display: inline-block; background: var(--accent); color: #0b0d12; border: 0; border-radius: 6px; padding: 8px 16px; font-weight: 600; text-decoration: none; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 10px; background: #232838; color: var(--accent); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/app/">Teach-Once</a>
+  <nav><a href="/app/teach/new">Teach</a><a href="/portal/login" target="_blank">Demo portal</a></nav>
+</header>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

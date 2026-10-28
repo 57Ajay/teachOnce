@@ -1,0 +1,29 @@
+{% extends "app/base.html" %}
+{% block title %}{{ meta.rec_id }} · Teach-Once{% endblock %}
+{% block content %}
+<h1>Recording {{ meta.rec_id }}</h1>
+<p class="muted">{{ meta.started_at }} · {{ '%.1f' % (meta.duration_ms / 1000) }} s · {{ events|length }} steps captured · drift level {{ meta.drift_level }}</p>
+<div class="card">
+  <video src="/app/recordings/{{ meta.rec_id }}/teach.mp4" controls style="width:100%;max-height:520px;background:#000"></video>
+  {% if meta.has_narration %}
+  <p class="muted" style="margin:10px 0 4px">Narration (24 kHz mono, what Voice Transcribe gets)</p>
+  <audio src="/app/recordings/{{ meta.rec_id }}/narration.wav" controls style="width:100%"></audio>
+  {% else %}<p class="muted">No narration was recorded.</p>{% endif %}
+</div>
+<div class="card">
+  <h2 style="font-size:16px;margin:0 0 10px">Captured events</h2>
+  <table>
+    <tr><th>#</th><th>t</th><th>Action</th><th>Target</th><th>Value</th><th>Page</th></tr>
+    {% for e in events %}
+    <tr>
+      <td>{{ e.idx }}</td>
+      <td class="mono">{{ '%.1f' % (e.ts_ms / 1000) }}s</td>
+      <td><span class="chip">{{ e.action }}</span></td>
+      <td>{% if e.target %}{{ e.target.role or e.target.tag }} <strong>{{ e.target.accessible_name }}</strong><br><code>{{ e.target.css }}</code>{% endif %}</td>
+      <td class="mono">{{ e.value if e.value is defined else '' }}</td>
+      <td class="mono">{{ e.url }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
