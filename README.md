@@ -20,7 +20,10 @@ Requires [uv](https://docs.astral.sh/uv/) and `ffmpeg`.
 ```bash
 cp .env.example .env   # add your META_API_KEY
 uv sync
+uv run check_api.py   # one cheap call per Meta model
 ```
+
+Developer notes are in [DOCS.md](DOCS.md).
 
 ## License
 
