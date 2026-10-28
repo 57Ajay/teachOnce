@@ -14,3 +14,7 @@ MAX_SPEND_USD = float(os.getenv("MAX_SPEND_USD", "100"))
 DATA_DIR = ROOT / "data"
 CASSETTE_DIR = DATA_DIR / "cassettes"
 COST_LEDGER = DATA_DIR / "costs.jsonl"
+CHROMIUM_PATH = os.getenv("CHROMIUM_PATH") or None
+
+PORTAL_USER = os.getenv("PORTAL_USER", "operator")
+PORTAL_PASSWORD = os.getenv("PORTAL_PASSWORD", "demo123")

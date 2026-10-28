@@ -21,7 +21,13 @@ Requires [uv](https://docs.astral.sh/uv/) and `ffmpeg`.
 cp .env.example .env   # add your META_API_KEY
 uv sync
 uv run check_api.py   # one cheap call per Meta model
+uv run playwright install chromium
+uv run gen_data.py    # 50 fake rows -> data/rows.csv
+uv run uvicorn app:app --port 8000
 ```
+
+Then open http://localhost:8000/portal/login (demo login `operator` / `demo123`).
+Add `?drift=1`, `2` or `3` to any portal URL to see the site "redesigned".
 
 Developer notes are in [DOCS.md](DOCS.md).
 

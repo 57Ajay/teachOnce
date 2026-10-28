@@ -1,0 +1,15 @@
+{% extends "portal/base.html" %}
+{% block crumbs %}<div class="{{ c('crumbs') }}"><a href="/portal/dashboard">Home</a> › Interstate Vehicle Tax › Payment</div>{% endblock %}
+{% block content %}
+<div class="{{ c('card') }}" style="max-width:560px;margin:0 auto">
+  <h1>Payment</h1>
+  <p class="{{ c('lead') }}">Demo payment gateway. No real money is charged and no card details are collected.</p>
+  <table>
+    <tr><th>Vehicle</th><td>{{ draft.veh_no }}</td></tr>
+    <tr><th>Amount</th><td class="{{ c('amount') }}">D$ {{ '{:,.2f}'.format(amount) }}</td></tr>
+  </table>
+  <form method="post" action="/portal/tax/pay" class="{{ c('actions') }}">
+    <button class="{{ c('btn') }}" id="{{ c('pay_btn') }}" type="submit">Pay Now (Demo)</button>
+  </form>
+</div>
+{% endblock %}

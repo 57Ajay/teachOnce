@@ -1,0 +1,23 @@
+{% extends "portal/base.html" %}
+{% block crumbs %}<div class="{{ c('crumbs') }}"><a href="/portal/dashboard">Home</a> › Interstate Vehicle Tax › Review</div>{% endblock %}
+{% block content %}
+<div class="{{ c('card') }}">
+  <h1>Review your application</h1>
+  <p class="{{ c('lead') }}">Check the details below before paying.</p>
+  <table>
+    <tr><th>Vehicle registration number</th><td>{{ draft.veh_no }}</td></tr>
+    <tr><th>Owner name</th><td>{{ draft.owner_name }}</td></tr>
+    <tr><th>Vehicle type</th><td>{{ draft.vehicle_type }}</td></tr>
+    <tr><th>Route</th><td>{{ draft.from_state }} → {{ draft.to_state }}</td></tr>
+    <tr><th>Entry date</th><td>{{ draft.entry_date }}</td></tr>
+    <tr><th>Tax period</th><td>{{ tax_periods[draft.tax_period] }}</td></tr>
+    <tr><th>Mobile number</th><td>{{ draft.mobile }}</td></tr>
+  </table>
+  <p>Tax payable</p>
+  <div class="{{ c('amount') }}" id="{{ c('amount') }}">D$ {{ '{:,.2f}'.format(amount) }}</div>
+  <div class="{{ c('actions') }}">
+    <a class="{{ c('btn') }} {{ c('btn-secondary') }}" id="{{ c('back_btn') }}" href="/portal/tax/new">Back</a>
+    <a class="{{ c('btn') }}" id="{{ c('proceed_btn') }}" href="/portal/tax/pay">Proceed to Pay</a>
+  </div>
+</div>
+{% endblock %}

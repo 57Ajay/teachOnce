@@ -1,0 +1,89 @@
+{% extends "portal/base.html" %}
+{% macro field(key) %}
+{% set w = widgets[key] %}
+{% set v = values.get(key, '') %}
+<div class="{{ c('field') }}">
+  {% if w == 'text' %}
+    <label for="{{ c(key) }}">{{ labels[key] }} <span class="{{ c('req') }}">*</span></label>
+    <input type="text" id="{{ c(key) }}" name="{{ c(key) }}" value="{{ v }}"
+      {% if key == 'veh_no' %}placeholder="{{ 'e.g. NV07AB1234' if level < 2 else 'Enter registration no.' }}"{% endif %}
+      {% if key == 'mobile' %}placeholder="10-digit number" inputmode="numeric"{% endif %}>
+  {% elif w == 'select' %}
+    {% set opts = vehicle_types if key == 'vehicle_type' else states %}
+    <label for="{{ c(key) }}">{{ labels[key] }} <span class="{{ c('req') }}">*</span></label>
+    <select id="{{ c(key) }}" name="{{ c(key) }}">
+      <option value="">-- Select --</option>
+      {% for o in opts %}<option value="{{ o }}" {% if o == v %}selected{% endif %}>{{ o }}</option>{% endfor %}
+    </select>
+  {% elif w == 'date' and level < 2 %}
+    <label for="{{ c(key) }}">{{ labels[key] }} <span class="{{ c('req') }}">*</span></label>
+    <input type="date" id="{{ c(key) }}" name="{{ c(key) }}" value="{{ v }}">
+  {% elif w == 'date' %}
+    {% set parts = v.split('-') if v.count('-') == 2 else ['', '', ''] %}
+    <fieldset>
+      <legend>{{ labels[key] }} <span class="{{ c('req') }}">*</span></legend>
+      <div class="{{ c('dmy') }}">
+        <div><label for="{{ c('entry_date_d') }}">Day</label>
+          <select id="{{ c('entry_date_d') }}" name="{{ c('entry_date_d') }}"><option value="">DD</option>
+            {% for i in range(1, 32) %}{% set s = '%02d' % i %}<option value="{{ s }}" {% if s == parts[2] %}selected{% endif %}>{{ s }}</option>{% endfor %}
+          </select></div>
+        <div><label for="{{ c('entry_date_m') }}">Month</label>
+          <select id="{{ c('entry_date_m') }}" name="{{ c('entry_date_m') }}"><option value="">MM</option>
+            {% for i in range(1, 13) %}{% set s = '%02d' % i %}<option value="{{ s }}" {% if s == parts[1] %}selected{% endif %}>{{ s }}</option>{% endfor %}
+          </select></div>
+        <div><label for="{{ c('entry_date_y') }}">Year</label>
+          <select id="{{ c('entry_date_y') }}" name="{{ c('entry_date_y') }}"><option value="">YYYY</option>
+            {% for y in years %}<option value="{{ y }}" {% if y == parts[0] %}selected{% endif %}>{{ y }}</option>{% endfor %}
+          </select></div>
+      </div>
+    </fieldset>
+  {% elif w == 'radio' and level < 2 %}
+    <fieldset>
+      <legend>{{ labels[key] }} <span class="{{ c('req') }}">*</span></legend>
+      <div class="{{ c('radios') }}">
+        {% for val, text in tax_periods.items() %}
+        <label><input type="radio" name="{{ c(key) }}" id="{{ c(key) }}_{{ val }}" value="{{ val }}" {% if val == v %}checked{% endif %}> {{ text }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+  {% else %}
+    <label for="{{ c(key) }}">{{ labels[key] }} <span class="{{ c('req') }}">*</span></label>
+    <select id="{{ c(key) }}" name="{{ c(key) }}">
+      <option value="">-- Select --</option>
+      {% for val, text in tax_periods.items() %}<option value="{{ val }}" {% if val == v %}selected{% endif %}>{{ text }}</option>{% endfor %}
+    </select>
+  {% endif %}
+  {% if errors.get(key) %}<div class="{{ c('err') }}">{{ errors[key] }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro submit() %}
+<button class="{{ c('btn') }}" id="{{ c('calc_btn') }}" type="submit">{{ 'Calculate Tax' if level == 0 else 'Compute Payable Amount' }}</button>
+{% endmacro %}
+
+{% block crumbs %}<div class="{{ c('crumbs') }}"><a href="/portal/dashboard">Home</a> › Interstate Vehicle Tax › New payment</div>{% endblock %}
+{% block content %}
+<div class="{{ c('card') }}">
+  <h1>Pay Interstate Vehicle Tax</h1>
+  <p class="{{ c('lead') }}">Fields marked <span class="{{ c('req') }}">*</span> are mandatory.</p>
+  {% if errors %}<div class="{{ c('err-box') }}" role="alert">Please correct the highlighted fields.</div>{% endif %}
+  <form method="post" action="/portal/tax/new" id="{{ c('tax_form') }}" novalidate>
+    <input type="hidden" name="_layout" value="{{ level }}">
+    {% if level >= 1 %}<div class="{{ c('aside') }}">{{ submit() }}</div>{% endif %}
+    {% for title, keys in sections %}
+    <div class="{{ c('section') }}">
+      <h2>{{ title }}</h2>
+      <div class="{{ c('grid2') if level >= 1 else '' }}">
+        {% for key in keys %}{{ field(key) }}{% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    <div class="{{ c('section') }}">
+      <label><input type="checkbox" id="{{ c('declaration') }}" name="{{ c('declaration') }}" {% if values.get('declaration') %}checked{% endif %}>
+        {{ 'I declare that the above details are correct.' if level < 2 else 'I hereby certify that the information furnished is true.' }}</label>
+      {% if errors.get('declaration') %}<div class="{{ c('err') }}">{{ errors['declaration'] }}</div>{% endif %}
+    </div>
+    {% if level == 0 %}<div class="{{ c('actions') }}">{{ submit() }}</div>{% endif %}
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "portal/base.html" %}
+{% block crumbs %}<div class="{{ c('crumbs') }}"><a href="/portal/dashboard">Home</a> › Interstate Vehicle Tax › Receipt</div>{% endblock %}
+{% block content %}
+<div class="{{ c('card') }}">
+  <h1 class="{{ c('success') }}">Payment Successful</h1>
+  <p class="{{ c('lead') }}">Keep this receipt for checkpoint inspection.</p>
+  <table>
+    <tr><th>Receipt No.</th><td id="{{ c('receipt_no') }}"><strong>{{ r.receipt_no }}</strong></td></tr>
+    <tr><th>Paid on</th><td>{{ r.paid_on }}</td></tr>
+    <tr><th>Amount paid</th><td>D$ {{ '{:,.2f}'.format(r.amount) }}</td></tr>
+    <tr><th>Vehicle registration number</th><td>{{ r.veh_no }}</td></tr>
+    <tr><th>Owner name</th><td>{{ r.owner_name }}</td></tr>
+    <tr><th>Vehicle type</th><td>{{ r.vehicle_type }}</td></tr>
+    <tr><th>Route</th><td>{{ r.from_state }} → {{ r.to_state }}</td></tr>
+    <tr><th>Entry date</th><td>{{ r.entry_date }}</td></tr>
+    <tr><th>Tax period</th><td>{{ tax_periods[r.tax_period] }}</td></tr>
+  </table>
+  <div class="{{ c('actions') }}"><a class="{{ c('btn') }} {{ c('btn-secondary') }}" href="/portal/dashboard">Back to dashboard</a></div>
+</div>
+{% endblock %}

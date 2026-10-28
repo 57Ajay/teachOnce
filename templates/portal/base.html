@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} · Demoland TransitPass Portal</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; font-size: 15px; color: #1f2933; background: #eef1f5; }
+  a { color: #1d4f91; }
+  .{{ c('demo-banner') }} { background: #fff4ce; color: #5c4400; text-align: center; font-size: 13px; padding: 5px; border-bottom: 1px solid #e6d28a; }
+  .{{ c('topbar') }} { background: #1d3a6e; color: #fff; display: flex; align-items: center; gap: 14px; padding: 12px 32px; }
+  .{{ c('emblem') }} { width: 42px; height: 42px; border-radius: 50%; background: #f2b632; color: #1d3a6e; display: grid; place-items: center; font-weight: 700; font-size: 18px; }
+  .{{ c('dept') }} { font-size: 12px; opacity: .85; letter-spacing: .04em; text-transform: uppercase; }
+  .{{ c('portal-name') }} { font-size: 20px; font-weight: 600; }
+  .{{ c('userbox') }} { margin-left: auto; font-size: 13px; }
+  .{{ c('userbox') }} a { color: #fff; }
+  .{{ c('subnav') }} { background: #284f8f; padding: 6px 32px; font-size: 13px; color: #dbe6f7; }
+  .{{ c('crumbs') }} { max-width: 980px; margin: 18px auto 0; font-size: 13px; color: #52606d; }
+  main { max-width: 980px; margin: 10px auto 40px; }
+  .{{ c('card') }} { background: #fff; border: 1px solid #cfd6df; border-radius: 4px; padding: 24px 28px; }
+  h1 { font-size: 22px; margin: 0 0 4px; color: #1d3a6e; }
+  .{{ c('lead') }} { color: #52606d; margin: 0 0 18px; }
+  .{{ c('section') }} { border-top: 1px solid #e1e6ec; padding-top: 14px; margin-top: 14px; }
+  .{{ c('section') }} h2 { font-size: 16px; color: #284f8f; margin: 0 0 10px; }
+  .{{ c('grid2') }} { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 28px; }
+  .{{ c('field') }} { margin-bottom: 14px; }
+  .{{ c('field') }} > label, .{{ c('field') }} legend { display: block; font-weight: 600; margin-bottom: 5px; }
+  .{{ c('field') }} fieldset { border: 0; padding: 0; margin: 0; }
+  .{{ c('req') }} { color: #c62828; }
+  input[type=text], input[type=password], input[type=date], select { width: 100%; max-width: 360px; padding: 8px 10px; border: 1px solid #9aa5b1; border-radius: 3px; font-size: 15px; background: #fff; }
+  .{{ c('dmy') }} { display: flex; gap: 8px; max-width: 360px; }
+  .{{ c('dmy') }} label { font-size: 12px; color: #52606d; display: block; }
+  .{{ c('radios') }} label { margin-right: 18px; font-weight: 400; }
+  .{{ c('err') }} { color: #c62828; font-size: 13px; margin-top: 4px; }
+  .{{ c('err-box') }} { background: #fdecea; border: 1px solid #f5c2c0; color: #8e1c1c; padding: 10px 14px; border-radius: 3px; margin-bottom: 14px; }
+  .{{ c('btn') }} { background: #1d3a6e; color: #fff; border: 0; padding: 10px 22px; border-radius: 3px; font-size: 15px; cursor: pointer; text-decoration: none; display: inline-block; }
+  .{{ c('btn') }}:hover { background: #284f8f; }
+  .{{ c('btn-secondary') }} { background: #fff; color: #1d3a6e; border: 1px solid #1d3a6e; }
+  .{{ c('actions') }} { display: flex; gap: 12px; margin-top: 18px; align-items: center; }
+  .{{ c('aside') }} { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+  .{{ c('tiles') }} { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .{{ c('tile') }} { background: #fff; border: 1px solid #cfd6df; border-left: 4px solid #1d3a6e; padding: 16px; border-radius: 3px; }
+  .{{ c('tile') }} p { color: #52606d; font-size: 13px; margin: 6px 0 0; }
+  .{{ c('tile-off') }} { border-left-color: #9aa5b1; color: #7b8794; }
+  table { border-collapse: collapse; width: 100%; max-width: 620px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e1e6ec; }
+  th { width: 45%; color: #52606d; font-weight: 600; }
+  .{{ c('amount') }} { font-size: 26px; font-weight: 700; color: #1d3a6e; }
+  .{{ c('success') }} { color: #1b7a3a; }
+  .{{ c('hint') }} { font-size: 13px; color: #52606d; background: #f4f7fb; border: 1px dashed #9aa5b1; padding: 8px 12px; margin-top: 16px; }
+  footer { text-align: center; font-size: 12px; color: #7b8794; padding: 20px; border-top: 1px solid #cfd6df; }
+  .{{ c('badge') }} { position: fixed; right: 8px; bottom: 8px; background: #323f4b; color: #fff; font-size: 11px; padding: 3px 7px; border-radius: 3px; opacity: .75; }
+  .{{ c('backdrop') }} { position: fixed; inset: 0; background: rgba(15, 23, 42, .55); display: grid; place-items: center; z-index: 10; }
+  .{{ c('modal') }} { background: #fff; width: 460px; padding: 22px 24px; border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+  .{{ c('modal') }} h2 { margin: 0 0 8px; font-size: 18px; }
+</style>
+</head>
+<body>
+<div class="{{ c('demo-banner') }}">Demo site for Teach-Once. Not a real government service.</div>
+<header class="{{ c('topbar') }}">
+  <div class="{{ c('emblem') }}">DT</div>
+  <div>
+    <div class="{{ c('dept') }}">Department of Transit · Demoland</div>
+    <div class="{{ c('portal-name') }}">TransitPass Portal</div>
+  </div>
+  {% if user %}<div class="{{ c('userbox') }}">Signed in as <strong>{{ user }}</strong> · <a href="/portal/logout">Log out</a></div>{% endif %}
+</header>
+<div class="{{ c('subnav') }}">Online services for interstate vehicle movement</div>
+{% block crumbs %}{% endblock %}
+<main>{% block content %}{% endblock %}</main>
+<footer>© Department of Transit, Demoland (fictional). Help desk 1800-000-000 (demo) · Accessibility · Terms of use</footer>
+<div class="{{ c('badge') }}">layout v{{ level }}</div>
+{% if show_consent %}
+<div class="{{ c('backdrop') }}" role="dialog" aria-modal="true" aria-labelledby="{{ c('consent-title') }}">
+  <div class="{{ c('modal') }}">
+    <h2 id="{{ c('consent-title') }}">We value your privacy</h2>
+    <p>This portal uses cookies to keep you signed in and to improve our services. You can accept all cookies or manage your preferences.</p>
+    <form method="post" action="/portal/consent" class="{{ c('actions') }}">
+      <input type="hidden" name="next" value="{{ path }}">
+      <button class="{{ c('btn') }}" type="submit" name="choice" value="all">Accept all</button>
+      <button class="{{ c('btn') }} {{ c('btn-secondary') }}" type="submit" name="choice" value="essential">Essential only</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+</body>
+</html>
