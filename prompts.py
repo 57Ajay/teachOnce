@@ -20,7 +20,7 @@ In `outputs`, list values the task produces that should be saved for each row (f
 
 If uncertain, set confidence low rather than guessing."""
 
-COMPILE_VERSION = "compile-v2"
+COMPILE_VERSION = "compile-v3"
 COMPILE = """You are the compiler of Teach-Once. You turn one recorded demonstration of a web task into a deterministic, parameterized workflow that a replay engine runs for every row of a CSV file with no AI in the loop.
 
 You get JSON with:
@@ -36,9 +36,9 @@ Produce the workflow:
 - `value`: for variables "{{variable_name}}". For constants the recorded value. A masked "***" value is a password: use "{{portal_password}}" and add the secret {"name": "portal_password", "env": "PORTAL_PASSWORD"}. For check, uncheck and click: null.
 - Radio buttons and options picked per row: put the template in the locator instead (role "radio" with name "{{variable_name}}", and a label locator with text "{{variable_name}}"), value null.
 - `target.locators`: start from the skeleton candidates, keep their order (role, label, placeholder, text, css). Copy css selectors exactly; never invent selectors. Shorten a link or button name to its visible title when the recorded name also contains a description. Drop a placeholder or text locator that contains the recorded value of a variable.
-- `target.description` and `target.noun_phrase`: from the step graph. `target.anchor_bbox`: the skeleton bbox.
+- `target.description` and `target.noun_phrase`: from the step graph.
 - `check`: a password field: none (never read a secret back). a click that navigated: url_contains with the stable part of the next page path (no ids or numbers that change per run). fill, fill_date and select: value_equals with value null. check, uncheck: none.
-- Outputs: for each step-graph output add a final `extract` step: `output` = the output name, target = a role "row" locator whose name is the label next to the value (plus a text locator if useful), `pattern` = a regex matching every plausible value of that output, not only the example: allow thousands separators, more or fewer digits, other letters (e.g. "DTP-\\d{4}-\\d{6}", "D\\$ [\\d,]+\\.\\d{2}"), check none.
+- Outputs: for each step-graph output add an `extract` step right after the step that lands on the output's page (the skeleton entry whose navigated_to is that page), before any step that leaves it: `output` = the output name, target = a role "row" locator whose name is the label next to the value (plus a text locator if useful), `pattern` = a regex matching every plausible value of that output, not only the example: allow thousands separators, more or fewer digits, other letters (e.g. "DTP-\\d{4}-\\d{6}", "D\\$ [\\d,]+\\.\\d{2}"), check none.
 - `variables`: one per variable in the step graph: `name`, `column` = the matching name from csv_columns (exact spelling; pick the closest meaning), `type` "string", `example` = the recorded value, `description`.
 - `optional`: false for every step.
 
@@ -57,3 +57,20 @@ Requirements:
 - Keep it readable: a small data table of steps at the top, one helper per concern, no classes. Python 3.11+.
 
 Reply with only the Python source code, no markdown fences, no explanation."""
+
+HEAL_VERSION = "heal-v2"
+HEAL = """You repair a browser automation that broke because the website changed. The automation was recorded on the old version of the site; ids, labels, wording, layout and even the kind of control may have changed since.
+
+You get a full-page screenshot of the page as it is now, a numbered list of the interactive elements on it (ref, role, accessible name, label, placeholder, box in screenshot pixels), the step that failed and why, and the steps that should happen on this page.
+
+1. `interruption`: is something in the way of the task: a cookie or consent banner, a modal dialog, or an interstitial page (e.g. a "session notice" with a Continue button) that the old site did not have? If so, set present=true, explain it, and give the ref of the button that dismisses it or continues the task (prefer accepting / continuing over cancelling), plus a 2-4 word visual noun phrase for that button ("blue button", "dark button in dialog"). Otherwise present=false and dismiss_ref=-1. If there is an interruption, the page behind it may be hidden: return an empty `steps` list.
+
+2. `steps`: for each listed step, find the element that now does what the step's intent describes. Match by meaning (intent, description, field purpose), not by exact old wording. Return:
+   - `situation`: "moved" (same kind of control, new place/name/id), "control_changed" (e.g. radio buttons became a dropdown), "split_into_parts" (e.g. one date input became separate day/month/year dropdowns) or "not_found".
+   - `ref`: the element's ref (-1 for split_into_parts or not_found).
+   - `new_action`: "same", or the action the new control needs ("select" for a dropdown, "fill", "check", "click").
+   - `parts`: for split_into_parts, one entry per part with `unit` (day, month, year) and its `ref`; otherwise empty.
+   - `noun_phrase`: what the control looks like, for an image segmentation model that sees shapes, not meanings: 2-4 words naming the kind of control and its look, WITHOUT its label text ("white input box", "dropdown menu", "blue button", "checkbox", "radio button"). The model returns every control of that kind; your ref picks which one.
+   - `explanation`: one short sentence.
+   - `confidence`: 0 to 1.
+   Never give two steps the same ref. If uncertain, set confidence low rather than guessing."""

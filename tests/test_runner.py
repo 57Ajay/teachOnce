@@ -10,7 +10,7 @@ import run
 import workflow
 from conftest import set_drift
 
-WF = config.ROOT / "workflows" / "pay-interstate-tax.v1.json"
+WF = config.ROOT / "examples" / "pay-interstate-tax.v1.json"
 
 
 def test_render_fills_variables_and_rejects_unknown_ones():
@@ -46,7 +46,7 @@ def test_happy_path_makes_zero_model_calls(rows_csv, base_url, monkeypatch):
 
     monkeypatch.setattr(meta_client, "_post", no_model_calls)
     set_drift(base_url, 0)
-    summary = run.run(WF, rows_csv, run_id="happy")
+    summary = run.run(WF, rows_csv, run_id="happy", heal=False)
     assert (summary["ok"], summary["failed"], summary["model_calls"]) == (3, 0, 0)
     results = [json.loads(line) for line in (config.RUNS_DIR / "happy" / "results.jsonl").read_text().splitlines()]
     assert all(r["outputs"]["receipt_no"].startswith("DTP-") for r in results)
@@ -56,7 +56,7 @@ def test_happy_path_makes_zero_model_calls(rows_csv, base_url, monkeypatch):
 def test_drift_fails_cleanly_without_heal(rows_csv, base_url, level, step_id, kind):
     set_drift(base_url, level)
     try:
-        summary = run.run(WF, rows_csv, limit=1, run_id=f"drift{level}")
+        summary = run.run(WF, rows_csv, limit=1, run_id=f"drift{level}", heal=False)
     finally:
         set_drift(base_url, 0)
     result = json.loads((config.RUNS_DIR / f"drift{level}" / "results.jsonl").read_text())

@@ -17,6 +17,11 @@ def strip_required(name: str) -> str:
     return re.sub(r"\s*\*$", "", name or "")
 
 
+def stable_css(css: str) -> bool:
+    """Only id selectors survive as locators; a positional path can match a different element after a redesign."""
+    return bool(re.fullmatch(r"#[\w-]+", css or ""))
+
+
 def is_field(target: dict) -> bool:
     return target.get("tag") in FIELD_TAGS and target.get("type") not in BUTTON_TYPES
 

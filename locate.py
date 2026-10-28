@@ -24,7 +24,7 @@ def to_playwright(page: Page, loc: Locator, values: dict) -> PwLocator:
             return page.locator(r(loc.selector))
 
 
-def _usable(candidate: PwLocator) -> bool:
+def usable(candidate: PwLocator) -> bool:
     try:
         return candidate.count() == 1 and candidate.is_visible() and candidate.is_enabled()
     except PlaywrightError:  # page is navigating
@@ -37,7 +37,7 @@ def resolve(page: Page, target: Target, values: dict, timeout_ms: int) -> PwLoca
     while True:
         for loc in target.locators:
             candidate = to_playwright(page, loc, values)
-            if _usable(candidate):
+            if usable(candidate):
                 return candidate
         if time.monotonic() > deadline:
             return None

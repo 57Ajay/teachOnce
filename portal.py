@@ -73,7 +73,6 @@ def render(request: Request, name: str, level: int | None = None, **ctx) -> HTML
         c=lambda n: alias(n, level),
         user=sess and sess.get("user"),
         show_consent=DRIFT["level"] == 3 and request.cookies.get("dtp_consent") != "1",
-        path=request.url.path,
     )
     return templates.TemplateResponse(request, f"portal/{name}", ctx)
 
@@ -150,15 +149,6 @@ def logout(request: Request):
     SESSIONS.pop(request.cookies.get("dtp_session", ""), None)
     response = redirect("/portal/login")
     response.delete_cookie("dtp_session")
-    return response
-
-
-@router.post("/consent")
-async def consent(request: Request):
-    form = await request.form()
-    next_url = str(form.get("next", "/portal/login"))
-    response = redirect(next_url if next_url.startswith("/portal/") else "/portal/login")
-    response.set_cookie("dtp_consent", "1", samesite="lax")
     return response
 
 

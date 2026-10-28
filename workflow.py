@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 import config
 
-WORKFLOWS_DIR = config.ROOT / "workflows"
+WORKFLOWS_DIR = config.DATA_DIR / "workflows"
 TEMPLATE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
 
@@ -32,6 +32,18 @@ class Target(BaseModel):
     anchor: Anchor | None = None
 
 
+class DatePart(BaseModel):
+    unit: Literal["day", "month", "year"]
+    target: Target
+
+
+class Interrupt(BaseModel):
+    """Something that can get in the way (a consent modal, an interstitial page) and the click that clears it."""
+    id: str
+    description: str = ""
+    target: Target
+
+
 class Check(BaseModel):
     kind: Literal["none", "value_equals", "url_contains", "text_visible", "element_visible", "element_hidden"] = "none"
     value: str | None = None
@@ -48,6 +60,7 @@ class Step(BaseModel):
     output: str | None = None
     pattern: str | None = None
     check: Check = Check()
+    parts: list[DatePart] = []
     optional: bool = False
     timeout_ms: int = 5000
     healed: list[dict] = []
@@ -75,6 +88,7 @@ class Workflow(BaseModel):
     variables: list[Variable] = []
     secrets: list[Secret] = []
     steps: list[Step]
+    interrupts: list[Interrupt] = []
 
 
 def render(template: str, values: dict) -> str:

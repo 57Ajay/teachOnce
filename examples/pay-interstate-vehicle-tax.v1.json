@@ -1,0 +1,686 @@
+{
+  "id": "pay-interstate-vehicle-tax",
+  "version": 1,
+  "name": "Pay Interstate Vehicle Tax",
+  "start_url": "{{PORTAL_URL}}/portal/login",
+  "source_recording": "rec_20261028_220743",
+  "variables": [
+    {
+      "name": "vehicle_registration_number",
+      "column": "vehicle_no",
+      "example": "NV07AB1234",
+      "description": "Vehicle registration number"
+    },
+    {
+      "name": "owner_name",
+      "column": "owner_name",
+      "example": "Asha Verma",
+      "description": "Owner name"
+    },
+    {
+      "name": "vehicle_type",
+      "column": "vehicle_type",
+      "example": "Bus",
+      "description": "Vehicle type"
+    },
+    {
+      "name": "from_state",
+      "column": "from_state",
+      "example": "Northvale",
+      "description": "Origin (from) state"
+    },
+    {
+      "name": "to_state",
+      "column": "to_state",
+      "example": "Westholm",
+      "description": "Destination (to) state"
+    },
+    {
+      "name": "entry_date",
+      "column": "entry_date",
+      "example": "2026-11-03",
+      "description": "Entry date"
+    },
+    {
+      "name": "tax_period",
+      "column": "tax_period",
+      "example": "7 days",
+      "description": "Tax period"
+    },
+    {
+      "name": "mobile_number",
+      "column": "mobile",
+      "example": "9876543210",
+      "description": "Mobile number"
+    }
+  ],
+  "secrets": [
+    {
+      "name": "portal_password",
+      "env": "PORTAL_PASSWORD"
+    }
+  ],
+  "steps": [
+    {
+      "id": "s01",
+      "intent": "Open the portal login page",
+      "action": "goto",
+      "value": "{{PORTAL_URL}}/portal/login",
+      "check": {
+        "kind": "url_contains",
+        "value": "/portal/login"
+      }
+    },
+    {
+      "id": "s02",
+      "intent": "Enter the operator username",
+      "action": "fill",
+      "target": {
+        "description": "First text input in centered Sign in card labeled Username with red asterisk",
+        "noun_phrase": "username text field",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "textbox",
+            "name": "Username"
+          },
+          {
+            "kind": "label",
+            "text": "Username"
+          },
+          {
+            "kind": "css",
+            "selector": "#username"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            439.0,
+            261.0,
+            799.0,
+            296.0
+          ]
+        }
+      },
+      "value": "operator",
+      "check": {
+        "kind": "value_equals"
+      }
+    },
+    {
+      "id": "s03",
+      "intent": "Enter the operator password",
+      "action": "fill",
+      "target": {
+        "description": "Second input in Sign in card labeled Password with asterisk below Username field",
+        "noun_phrase": "password text field",
+        "locators": [
+          {
+            "kind": "label",
+            "text": "Password"
+          },
+          {
+            "kind": "css",
+            "selector": "#password"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            439.0,
+            332.0,
+            799.0,
+            367.0
+          ]
+        }
+      },
+      "value": "{{portal_password}}"
+    },
+    {
+      "id": "s04",
+      "intent": "Click Sign in to log in",
+      "action": "click",
+      "target": {
+        "description": "Dark blue rectangular button labeled Sign in below password field",
+        "noun_phrase": "blue Sign in button",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "Sign in"
+          },
+          {
+            "kind": "css",
+            "selector": "#login_btn"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            439.0,
+            381.0,
+            529.0,
+            418.0
+          ]
+        }
+      },
+      "check": {
+        "kind": "url_contains",
+        "value": "/portal/dashboard"
+      }
+    },
+    {
+      "id": "s05",
+      "intent": "Open Pay Interstate Vehicle Tax service",
+      "action": "click",
+      "target": {
+        "description": "Leftmost service card on dashboard titled Pay Interstate Vehicle Tax with entry tax subtitle",
+        "noun_phrase": "Pay Interstate Vehicle Tax link",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "link",
+            "name": "Pay Interstate Vehicle Tax"
+          },
+          {
+            "kind": "css",
+            "selector": "#tile_tax"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            150.0,
+            227.0,
+            466.0,
+            314.0
+          ]
+        }
+      },
+      "check": {
+        "kind": "url_contains",
+        "value": "/portal/tax/new"
+      }
+    },
+    {
+      "id": "s06",
+      "intent": "Enter the vehicle registration number",
+      "action": "fill",
+      "target": {
+        "description": "Top text input under Vehicle details section labeled Vehicle registration number",
+        "noun_phrase": "vehicle registration text field",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "textbox",
+            "name": "Vehicle registration number"
+          },
+          {
+            "kind": "label",
+            "text": "Vehicle registration number"
+          },
+          {
+            "kind": "placeholder",
+            "text": "e.g. NV07AB1234"
+          },
+          {
+            "kind": "css",
+            "selector": "#veh_no"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            172.0,
+            317.0,
+            532.0,
+            352.0
+          ]
+        }
+      },
+      "value": "{{vehicle_registration_number}}",
+      "check": {
+        "kind": "value_equals"
+      }
+    },
+    {
+      "id": "s07",
+      "intent": "Enter the owner name",
+      "action": "fill",
+      "target": {
+        "description": "Second text input under Vehicle details labeled Owner name",
+        "noun_phrase": "owner name text field",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "textbox",
+            "name": "Owner name"
+          },
+          {
+            "kind": "label",
+            "text": "Owner name"
+          },
+          {
+            "kind": "css",
+            "selector": "#owner_name"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            172.0,
+            388.0,
+            532.0,
+            423.0
+          ]
+        }
+      },
+      "value": "{{owner_name}}",
+      "check": {
+        "kind": "value_equals"
+      }
+    },
+    {
+      "id": "s08",
+      "intent": "Select the vehicle type",
+      "action": "select",
+      "target": {
+        "description": "Dropdown under Vehicle details labeled Vehicle type showing Select placeholder",
+        "noun_phrase": "vehicle type dropdown",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "combobox",
+            "name": "Vehicle type"
+          },
+          {
+            "kind": "label",
+            "text": "Vehicle type"
+          },
+          {
+            "kind": "css",
+            "selector": "#vehicle_type"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            172.0,
+            459.0,
+            532.0,
+            496.0
+          ]
+        }
+      },
+      "value": "{{vehicle_type}}",
+      "check": {
+        "kind": "value_equals"
+      }
+    },
+    {
+      "id": "s09",
+      "intent": "Select the origin state",
+      "action": "select",
+      "target": {
+        "description": "First dropdown under Journey details section labeled From state",
+        "noun_phrase": "From state dropdown",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "combobox",
+            "name": "From state"
+          },
+          {
+            "kind": "label",
+            "text": "From state"
+          },
+          {
+            "kind": "css",
+            "selector": "#from_state"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            172.0,
+            224.0,
+            532.0,
+            261.0
+          ]
+        }
+      },
+      "value": "{{from_state}}",
+      "check": {
+        "kind": "value_equals"
+      }
+    },
+    {
+      "id": "s10",
+      "intent": "Select the destination state",
+      "action": "select",
+      "target": {
+        "description": "Second dropdown under Journey details labeled To state",
+        "noun_phrase": "To state dropdown",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "combobox",
+            "name": "To state"
+          },
+          {
+            "kind": "label",
+            "text": "To state"
+          },
+          {
+            "kind": "css",
+            "selector": "#to_state"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            172.0,
+            297.0,
+            532.0,
+            334.0
+          ]
+        }
+      },
+      "value": "{{to_state}}",
+      "check": {
+        "kind": "value_equals"
+      }
+    },
+    {
+      "id": "s11",
+      "intent": "Enter the entry date",
+      "action": "fill_date",
+      "target": {
+        "description": "Date input under Journey details labeled Entry date with mm/dd/yyyy placeholder and calendar icon",
+        "noun_phrase": "entry date field",
+        "locators": [
+          {
+            "kind": "label",
+            "text": "Entry date"
+          },
+          {
+            "kind": "css",
+            "selector": "#entry_date"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            172.0,
+            370.0,
+            532.0,
+            408.0
+          ]
+        }
+      },
+      "value": "{{entry_date}}",
+      "check": {
+        "kind": "value_equals"
+      }
+    },
+    {
+      "id": "s12",
+      "intent": "Select the tax period",
+      "action": "check",
+      "target": {
+        "description": "Radio group labeled Tax period with 1 day, 7 days, 30 days options",
+        "noun_phrase": "tax period radio buttons",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "radio",
+            "name": "{{tax_period}}"
+          },
+          {
+            "kind": "label",
+            "text": "{{tax_period}}"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            352.0,
+            447.0,
+            365.0,
+            460.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "s13",
+      "intent": "Enter the mobile number",
+      "action": "fill",
+      "target": {
+        "description": "Text input under Contact details labeled Mobile number with 10-digit number placeholder",
+        "noun_phrase": "mobile number text field",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "textbox",
+            "name": "Mobile number"
+          },
+          {
+            "kind": "label",
+            "text": "Mobile number"
+          },
+          {
+            "kind": "placeholder",
+            "text": "10-digit number"
+          },
+          {
+            "kind": "css",
+            "selector": "#mobile"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            172.0,
+            542.0,
+            532.0,
+            577.0
+          ]
+        }
+      },
+      "value": "{{mobile_number}}",
+      "check": {
+        "kind": "value_equals"
+      }
+    },
+    {
+      "id": "s14",
+      "intent": "Tick the declaration checkbox",
+      "action": "check",
+      "target": {
+        "description": "Small checkbox above Calculate Tax button labeled I declare that the above details are correct",
+        "noun_phrase": "declaration checkbox",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "checkbox",
+            "name": "I declare that the above details are correct."
+          },
+          {
+            "kind": "label",
+            "text": "I declare that the above details are correct."
+          },
+          {
+            "kind": "css",
+            "selector": "#declaration"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            176.0,
+            609.0,
+            189.0,
+            622.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "s15",
+      "intent": "Click Calculate Tax to review",
+      "action": "click",
+      "target": {
+        "description": "Dark blue button labeled Calculate Tax at bottom of tax form",
+        "noun_phrase": "blue Calculate Tax button",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "Calculate Tax"
+          },
+          {
+            "kind": "css",
+            "selector": "#calc_btn"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            172.0,
+            643.0,
+            305.0,
+            680.0
+          ]
+        }
+      },
+      "check": {
+        "kind": "url_contains",
+        "value": "/portal/tax/review"
+      }
+    },
+    {
+      "id": "s16",
+      "intent": "Proceed to payment",
+      "action": "click",
+      "target": {
+        "description": "White button labeled Proceed to Pay next to Back on review page",
+        "noun_phrase": "Proceed to Pay link",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "link",
+            "name": "Proceed to Pay"
+          },
+          {
+            "kind": "css",
+            "selector": "#proceed_btn"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            270.0,
+            587.0,
+            417.0,
+            624.0
+          ]
+        }
+      },
+      "check": {
+        "kind": "url_contains",
+        "value": "/portal/tax/pay"
+      }
+    },
+    {
+      "id": "s17",
+      "intent": "Confirm demo payment",
+      "action": "click",
+      "target": {
+        "description": "Blue button labeled Pay Now (Demo) under Amount on Payment page",
+        "noun_phrase": "blue Pay Now button",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "Pay Now (Demo)"
+          },
+          {
+            "kind": "css",
+            "selector": "#pay_btn"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            389.0,
+            369.0,
+            547.0,
+            406.0
+          ]
+        }
+      },
+      "check": {
+        "kind": "url_contains",
+        "value": "/portal/tax/receipt"
+      }
+    },
+    {
+      "id": "s18",
+      "intent": "Extract receipt_no from the Payment Successful receipt",
+      "action": "extract",
+      "target": {
+        "description": "Receipt No. field on Payment Successful receipt",
+        "noun_phrase": "Receipt No. field",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "row",
+            "name": "Receipt No."
+          },
+          {
+            "kind": "text",
+            "text": "Receipt No."
+          }
+        ]
+      },
+      "output": "receipt_no",
+      "pattern": "DTP-\\d{4}-\\d{6}"
+    },
+    {
+      "id": "s19",
+      "intent": "Extract amount_paid from the Payment Successful receipt",
+      "action": "extract",
+      "target": {
+        "description": "Amount paid field on Payment Successful receipt",
+        "noun_phrase": "Amount paid field",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "row",
+            "name": "Amount paid"
+          },
+          {
+            "kind": "text",
+            "text": "Amount paid"
+          }
+        ]
+      },
+      "output": "amount_paid",
+      "pattern": "D\\$ [\\d,]+\\.\\d{2}"
+    },
+    {
+      "id": "s20",
+      "intent": "Return to dashboard",
+      "action": "click",
+      "target": {
+        "description": "White outlined button labeled Back to dashboard at bottom of receipt",
+        "noun_phrase": "Back to dashboard link",
+        "locators": [
+          {
+            "kind": "role",
+            "role": "link",
+            "name": "Back to dashboard"
+          }
+        ],
+        "anchor": {
+          "bbox": [
+            179.0,
+            576.0,
+            350.0,
+            615.0
+          ]
+        }
+      },
+      "check": {
+        "kind": "url_contains",
+        "value": "/portal/dashboard"
+      }
+    }
+  ]
+}
