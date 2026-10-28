@@ -1,16 +1,11 @@
 import re
-import socket
-import threading
-import time
 
-import httpx
 import pytest
-import uvicorn
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 
-import app
 import config
+from conftest import set_drift
 
 ROW = {"veh_no": "NV07AB1234", "owner_name": "Asha Verma", "vehicle_type": "Bus", "from_state": "Northvale",
        "to_state": "Westholm", "entry_date": "2026-11-03", "tax_period": "7 days", "mobile": "9876543210"}
@@ -19,21 +14,6 @@ LABELS = {
     2: ["Registration No. of Vehicle", "Name of Registered Owner", "Vehicle Category", "State of Origin",
         "Destination State", "Contact Mobile No."],
 }
-
-
-@pytest.fixture(scope="module")
-def base_url():
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app.app, host="127.0.0.1", port=port, log_level="warning"))
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    while not server.started:
-        time.sleep(0.05)
-    yield f"http://127.0.0.1:{port}"
-    server.should_exit = True
-    thread.join()
 
 
 @pytest.fixture(scope="module")
@@ -51,10 +31,6 @@ def page(browser, base_url):
     page.set_default_timeout(3000)
     yield page
     context.close()
-
-
-def set_drift(base_url, level):
-    httpx.post(f"{base_url}/portal/admin/drift", json={"level": level}).raise_for_status()
 
 
 def fill_like_a_human(page, level):
