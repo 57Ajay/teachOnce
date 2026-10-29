@@ -1,0 +1,240 @@
+{% extends "app/base.html" %}
+{% block title %}{{ run_id }} · Teach-Once{% endblock %}
+{% block content %}
+<style>
+  main { max-width: 1440px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  .meter { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 14px 0 18px; }
+  .meter .card { margin: 0; }
+  .meter .label { color: var(--muted); font-size: 13px; }
+  .meter .big { font-size: 34px; font-weight: 700; line-height: 1.2; margin: 4px 0; }
+  .meter .ours .big { color: var(--ok); }
+  .meter .agent .big { color: var(--warn); }
+  .panes { display: grid; grid-template-columns: 300px 1fr 360px; gap: 14px; align-items: start; }
+  .panes .card { margin: 0; }
+  #grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+  #grid div { aspect-ratio: 1; border-radius: 4px; background: #232838; font-size: 10px; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+  #grid .running { background: var(--accent); color: #0b0d12; }
+  #grid .healing { background: var(--warn); color: #0b0d12; animation: pulse 1s infinite alternate; }
+  #grid .ok { background: var(--ok); color: #0b0d12; }
+  #grid .healed { background: var(--ok); color: #0b0d12; box-shadow: inset 0 0 0 3px var(--warn); }
+  #grid .failed { background: var(--rec); color: #0b0d12; }
+  @keyframes pulse { to { opacity: .55; } }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  #shot { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #000; min-height: 200px; }
+  #feed { list-style: none; margin: 0; padding: 0; max-height: 560px; overflow: auto; font-size: 13px; }
+  #feed li { padding: 4px 0; border-bottom: 1px solid var(--line); }
+  #feed .heal { color: var(--warn); }
+  #feed .bad { color: var(--rec); }
+  .heal-card .imgs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
+  .heal-card figure { margin: 0; }
+  .heal-card img { width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+  .heal-card figcaption { color: var(--muted); font-size: 12px; }
+  .diff td:nth-child(2) { color: var(--rec); }
+  .diff td:nth-child(3) { color: var(--ok); }
+</style>
+
+<div style="display:flex;align-items:baseline;gap:12px">
+  <h1>Run {{ run_id }}</h1><span class="chip" id="status">connecting…</span>
+</div>
+<p class="muted" id="wf" style="margin:0"></p>
+
+<div class="meter">
+  <div class="card ours">
+    <div class="label">Teach-Once, this run</div>
+    <div class="big" id="ours-usd">$0.000</div>
+    <div><b id="ours-calls">0</b> model calls · <b id="ours-rows">0</b> rows done · <b id="ours-time">–</b> per row</div>
+  </div>
+  <div class="card agent">
+    {% if baseline %}
+    <div class="label">Computer-use agent ({{ baseline.model }}), same rows</div>
+    <div class="big" id="agent-usd">$0.00</div>
+    <div><b id="agent-calls">0</b> model calls · <b id="agent-time">0 min</b> · {{ '%.0f' % (baseline.seconds / 60) }} min per row</div>
+    <div class="muted" style="font-size:12px;margin-top:4px">Measured by <code>baseline.py</code>: {{ baseline.ok }}/{{ baseline.rows }} rows completed, ${{ '%.2f' % baseline.usd }} and {{ '%.0f' % baseline.turns }} model calls per row.</div>
+    {% else %}
+    <div class="label">Computer-use agent</div>
+    <p class="muted">No baseline measured yet. Run <code>uv run baseline.py data/rows.csv</code>.</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <div class="label">At 10,000 rows a day</div>
+    <div style="margin-top:8px">Teach-Once: <b id="day-ours">$0 per row</b></div>
+    {% if baseline %}<div>Agent: <b>${{ '{:,.0f}'.format(baseline.usd * 10000) }}</b>, {{ '{:,.0f}'.format(baseline.turns * 10000) }} model calls, {{ '{:,.0f}'.format(baseline.seconds * 10000 / 3600) }} hours of agent time</div>{% endif %}
+    <div class="muted" style="font-size:12px;margin-top:4px">Teach-Once pays once to compile and once per site redesign (the heals below); every other row runs with zero model calls.</div>
+  </div>
+</div>
+
+<div class="panes">
+  <div class="card">
+    <h2>Rows</h2>
+    <div id="grid"></div>
+    <div class="legend"><span><i style="background:var(--accent)"></i>running</span><span><i style="background:var(--warn)"></i>healing</span>
+      <span><i style="background:var(--ok)"></i>done</span><span><i style="background:var(--ok);box-shadow:inset 0 0 0 2px var(--warn)"></i>healed</span>
+      <span><i style="background:var(--rec)"></i>failed</span></div>
+  </div>
+  <div class="card">
+    <h2>Latest screen <span class="muted" id="shot-label" style="font-weight:400"></span></h2>
+    <img id="shot" alt="">
+  </div>
+  <div class="card">
+    <h2>Events</h2>
+    <ol id="feed"></ol>
+  </div>
+</div>
+
+<h2 style="margin-top:22px;font-size:17px">Heals</h2>
+<div id="heals"><p class="muted" id="no-heals">No heals. Press a redesign level above while the run is going.</p></div>
+
+<script>
+  const runId = {{ run_id | tojson }};
+  const baseline = {{ baseline | tojson }};
+  const totals = { rows: 0, usd: 0, calls: 0, ms: 0, healUsd: 0 };
+  const $ = (id) => document.getElementById(id);
+
+  function el(tag, text, cls) {
+    const e = document.createElement(tag);
+    if (text !== undefined) e.textContent = text;
+    if (cls) e.className = cls;
+    return e;
+  }
+  function cell(row) {
+    let c = $(`row-${row}`);
+    if (!c) {
+      c = el("div", row);
+      c.id = `row-${row}`;
+      $("grid").appendChild(c);
+    }
+    return c;
+  }
+  function feed(text, cls) {
+    const list = $("feed");
+    list.prepend(el("li", text, cls));
+    while (list.children.length > 300) list.lastChild.remove();
+  }
+  function showShot(path, label) {
+    $("shot").src = `/app/runs/${runId}/${path}`;
+    $("shot-label").textContent = label;
+  }
+  const money = (v, digits = 2) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const duration = (s) => s < 90 ? `${s.toFixed(1)} s` : s < 5400 ? `${(s / 60).toFixed(0)} min` : `${(s / 3600).toFixed(1)} h`;
+
+  function updateMeter() {
+    $("ours-usd").textContent = money(totals.usd, 3);
+    $("ours-calls").textContent = totals.calls;
+    $("ours-rows").textContent = totals.rows;
+    $("ours-time").textContent = totals.rows ? duration(totals.ms / totals.rows / 1000) : "–";
+    $("day-ours").textContent = `${money(totals.healUsd, 3)} in heals, then $0 per row`;
+    if (!baseline) return;
+    $("agent-usd").textContent = money(totals.rows * baseline.usd);
+    $("agent-calls").textContent = Math.round(totals.rows * baseline.turns).toLocaleString("en-US");
+    $("agent-time").textContent = duration(totals.rows * baseline.seconds);
+  }
+
+  const locator = (loc) => loc ? `${loc.kind}: ${[loc.role, loc.name || loc.text || loc.selector].filter(Boolean).join(" ")}` : "–";
+
+  async function addDiff(card, ev) {
+    const id = ev.workflow.replace(/\.v\d+\.json$/, "");
+    const r = await fetch(`/app/workflows/diffs/${id}.v${ev.from_v}_to_v${ev.to_v}.json`);
+    if (!r.ok) return;
+    const diff = await r.json();
+    const table = el("table", undefined, "diff");
+    table.appendChild(el("tr")).append(el("th", "Step"), el("th", `v${ev.from_v}`), el("th", `v${ev.to_v}`));
+    for (const ch of diff.steps) {
+      const before = ch.before, after = ch.after;
+      const parts = (after.parts || []).map((p) => `${p.unit} → ${locator(p.target.locators[0])}`).join("; ");
+      const was = `${before.action} · ${locator(before.target?.locators?.[0])}`;
+      const now = `${after.action} · ${parts || locator(after.target?.locators?.[0])}`;
+      table.appendChild(el("tr")).append(el("td", ch.step_id), el("td", was), el("td", now));
+    }
+    for (const it of diff.interrupts_added)
+      table.appendChild(el("tr")).append(el("td", "interrupt"), el("td", "–"), el("td", `${(it.description || it.id).replace(/\.$/, "")} → click ${locator(it.target.locators[0])}`));
+    card.appendChild(table);
+  }
+
+  function addHeal(ev) {
+    $("no-heals")?.remove();
+    const card = el("div", undefined, "card heal-card");
+    const verdict = ev.verified ? `v${ev.from_v} → v${ev.to_v}` : "unrecoverable";
+    card.appendChild(el("h2", `${ev.heal} · row ${ev.row} · step ${ev.step_id} · ${ev.failure} · ${verdict}`));
+    card.appendChild(el("div", `${(ev.latency_ms / 1000).toFixed(1)} s · ${money(ev.cost_usd, 3)} · ${ev.model_calls} model calls`, "muted"));
+    const last = ev.attempts[ev.attempts.length - 1] || {};
+    card.appendChild(el("p", last.summary || last.error || ""));
+    const tag = `${ev.heal}_${ev.attempts.length - 1}`;
+    const imgs = el("div", undefined, "imgs");
+    for (const [kind, caption] of [["before", "What the runner saw"], ["overlay", "SAM 3.1 masks on Muse Spark's picks"]]) {
+      const fig = el("figure");
+      const img = el("img");
+      img.src = `/app/runs/${runId}/heals/${tag}_${kind}.png`;
+      img.onerror = () => fig.remove();
+      const link = el("a");
+      link.href = img.src;
+      link.target = "_blank";
+      link.appendChild(img);
+      fig.append(link, el("figcaption", caption));
+      imgs.appendChild(fig);
+    }
+    card.appendChild(imgs);
+    $("heals").appendChild(card);
+    if (ev.verified) addDiff(card, ev);
+  }
+
+  const handlers = {
+    run_start(ev) {
+      $("wf").textContent = `${ev.workflow} · ${ev.rows} rows · self-healing ${ev.heal ? "on" : "off"}`;
+      for (let i = ev.start_row; i < ev.start_row + ev.rows; i++) cell(i);
+    },
+    row_start(ev) { cell(ev.row).className = "running"; },
+    step_ok(ev) { if (ev.screenshot) showShot(ev.screenshot, `row ${ev.row} · ${ev.step}`); },
+    step_fail(ev) {
+      feed(`row ${ev.row} · ${ev.step} ${ev.kind}: ${ev.message}`, "bad");
+      showShot(ev.screenshot, `row ${ev.row} · ${ev.step} failed`);
+    },
+    heal_start(ev) {
+      cell(ev.row).className = "healing";
+      $("status").textContent = "healing";
+      feed(`healing ${ev.summary}`, "heal");
+    },
+    heal_done(ev) {
+      $("status").textContent = "running";
+      totals.healUsd += ev.cost_usd;
+      feed(`healed ${ev.summary}`, "heal");
+      addHeal(ev);
+    },
+    heal_failed(ev) {
+      $("status").textContent = "running";
+      totals.healUsd += ev.cost_usd;
+      feed(`heal failed ${ev.summary}`, "bad");
+      addHeal(ev);
+    },
+    row_done(ev) {
+      cell(ev.row_idx).className = ev.status === "failed" ? "failed" : ev.heals_used ? "healed" : "ok";
+      totals.rows += 1;
+      totals.usd += ev.cost_usd;
+      totals.calls += ev.model_calls;
+      totals.ms += ev.duration_ms;
+      const what = ev.error ? `${ev.error.step_id} ${ev.error.kind}` : Object.values(ev.outputs).join(" ");
+      feed(`row ${ev.row_idx} ${ev.status} · ${(ev.duration_ms / 1000).toFixed(1)} s · ${what}`, ev.error ? "bad" : "");
+      updateMeter();
+    },
+    run_done(ev) {
+      $("status").textContent = `done · ${ev.ok}/${ev.rows} rows OK · ${ev.heals} heals · ${ev.duration_s} s`;
+      $("wf").textContent = `${ev.workflow} · ${ev.rows} rows`;
+    },
+    run_failed(ev) {
+      $("status").textContent = "failed";
+      feed(`run failed: ${ev.error}`, "bad");
+    },
+    stream_end() { $("status").textContent = "stopped (incomplete)"; },
+  };
+
+  const source = new EventSource(`/app/api/runs/${runId}/events`);
+  source.onopen = () => { if ($("status").textContent === "connecting…") $("status").textContent = "running"; };
+  source.onmessage = (msg) => {
+    const ev = JSON.parse(msg.data);
+    handlers[ev.type]?.(ev);
+    if (["run_done", "run_failed", "stream_end"].includes(ev.type)) source.close();
+  };
+  updateMeter();
+</script>
+{% endblock %}

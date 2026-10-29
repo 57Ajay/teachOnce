@@ -54,7 +54,8 @@
 {% if workflow %}
 <div class="card">
   <h2 style="font-size:16px;margin:0 0 10px">Workflow compiled by Muse Wonder: {{ workflow.id }}.v{{ workflow.version }}
-    <a class="muted" style="font-size:13px;font-weight:400" href="/app/workflows/{{ compiled.workflow }}">json</a></h2>
+    <a class="muted" style="font-size:13px;font-weight:400" href="/app/workflows/{{ compiled.workflow }}">json</a>
+    <button class="btn" id="run" style="margin-left:12px;font-size:13px">▶ Run 50 rows</button> <span class="muted" id="run-error" style="font-size:13px;font-weight:400"></span></h2>
   <table>
     <tr><th>Step</th><th>Action</th><th>Value</th><th>First locator</th><th>Check</th></tr>
     {% for s in workflow.steps %}
@@ -89,8 +90,13 @@
   </table>
 </div>
 
+<script src="/static/runs.js"></script>
 <script>
   const recId = {{ meta.rec_id | tojson }};
+  {% if workflow %}
+  document.getElementById("run").addEventListener("click", () =>
+    startRun({{ ('data/workflows/' ~ compiled.workflow) | tojson }}, 50, true, document.getElementById("run-error")));
+  {% endif %}
   const list = document.getElementById("stages");
   const button = document.getElementById("compile");
   function show(job) {

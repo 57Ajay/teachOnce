@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <title>{% block title %}Teach-Once{% endblock %}</title>
 <style>
-  :root { --bg: #0f1115; --panel: #171a21; --line: #2a2f3a; --text: #e6e8ec; --muted: #9aa3b2; --accent: #7c9cff; --rec: #ff4d4f; --ok: #3ccf91; }
+  :root { --bg: #0f1115; --panel: #171a21; --line: #2a2f3a; --text: #e6e8ec; --muted: #9aa3b2; --accent: #7c9cff; --rec: #ff4d4f; --ok: #3ccf91; --warn: #f5a524; }
   * { box-sizing: border-box; }
   body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
   a { color: var(--accent); }
@@ -22,13 +23,31 @@
   th { color: var(--muted); font-weight: 600; }
   code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
   .chip { display: inline-block; padding: 1px 8px; border-radius: 10px; background: #232838; color: var(--accent); font-size: 12px; }
+  .drift { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+  .drift button { background: #232838; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 3px 10px; cursor: pointer; font: inherit; }
+  .drift button.on { background: var(--accent); color: #0b0d12; border-color: var(--accent); font-weight: 600; }
 </style>
 </head>
 <body>
 <header>
   <a class="brand" href="/app/">Teach-Once</a>
   <nav><a href="/app/teach/new">Teach</a><a href="/portal/login" target="_blank">Demo portal</a></nav>
+  <div class="drift" title="Ship a redesign of the demo portal, live">Portal redesign
+    <button data-level="0" title="Original site">0</button>
+    <button data-level="1" title="Renamed ids and classes, new layout, relabelled submit button">1</button>
+    <button data-level="2" title="Level 1 + reworded labels, date split into day/month/year, radios become a dropdown">2</button>
+    <button data-level="3" title="Level 2 + cookie consent modal and a session-notice page">3</button>
+  </div>
 </header>
 <main>{% block content %}{% endblock %}</main>
+<script>
+  async function setDrift(level) {
+    const init = level === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level }) };
+    const { level: current } = await (await fetch("/portal/admin/drift", init)).json();
+    document.querySelectorAll(".drift [data-level]").forEach((b) => b.classList.toggle("on", +b.dataset.level === current));
+  }
+  document.querySelectorAll(".drift [data-level]").forEach((b) => b.addEventListener("click", () => setDrift(+b.dataset.level)));
+  setDrift();
+</script>
 </body>
 </html>
