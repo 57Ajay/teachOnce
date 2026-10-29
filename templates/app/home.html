@@ -4,6 +4,37 @@
 <p class="muted">Record the task while narrating it. Meta's models compile it into a workflow that runs with zero model calls and heals itself when the site changes.</p>
 <p><a class="btn" href="/app/teach/new">● Teach a new task</a></p>
 <div class="card">
+  <h2 style="font-size:16px;margin:0 0 10px">Run a workflow</h2>
+  {% if workflows %}
+  <form id="run-form" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <select name="workflow" style="padding:6px;background:#0b0d12;color:var(--text);border:1px solid var(--line);border-radius:6px">
+      {% for w in workflows %}<option>{{ w }}</option>{% endfor %}
+    </select>
+    <label class="muted">rows <input name="rows" type="number" value="50" min="1" max="50" style="width:64px;padding:5px;background:#0b0d12;color:var(--text);border:1px solid var(--line);border-radius:6px"></label>
+    <label class="muted"><input name="heal" type="checkbox" checked> self-healing</label>
+    <button class="btn">▶ Run</button>
+    <span class="muted" id="run-error"></span>
+  </form>
+  <p class="muted" style="margin:8px 0 0">Rows come from <code>data/rows.csv</code> (fake data, generated if missing).</p>
+  {% else %}<p class="muted">No workflows yet. Teach a task and compile it.</p>{% endif %}
+</div>
+<div class="card">
+  <h2 style="font-size:16px;margin:0 0 10px">Runs</h2>
+  {% if runs %}
+  <table>
+    <tr><th>Run</th><th>Workflow</th><th>Rows OK</th><th>Heals</th><th>Model calls</th><th>Cost</th><th>Time</th></tr>
+    {% for r in runs %}
+    <tr><td><a href="/app/runs/{{ r.run_id }}">{{ r.run_id }}</a></td>
+      {% if r.rows is defined %}
+      <td class="mono">{{ r.workflow }}</td><td>{{ r.ok }}/{{ r.rows }}</td><td>{{ r.heals }}</td><td>{{ r.model_calls }}</td>
+      <td>${{ '%.3f' % r.cost_usd }}</td><td>{{ r.duration_s }} s</td>
+      {% else %}<td colspan="6" class="muted">{{ r.state }}</td>{% endif %}
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No runs yet.</p>{% endif %}
+</div>
+<div class="card">
   <h2 style="font-size:16px;margin:0 0 10px">Recordings</h2>
   {% if recordings %}
   <table>
@@ -15,4 +46,12 @@
   </table>
   {% else %}<p class="muted">No recordings yet.</p>{% endif %}
 </div>
+<script src="/static/runs.js"></script>
+<script>
+  document.getElementById("run-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const f = e.target;
+    startRun(f.workflow.value, +f.rows.value, f.heal.checked, document.getElementById("run-error"));
+  });
+</script>
 {% endblock %}

@@ -9,7 +9,8 @@
 | `meta_client.py` | Thin HTTP client for the Meta Model API: `responses`, `structured`, `upload_file`, `transcribe`. Retries, record/replay cache, logs every call's cost. |
 | `sam.py` | SAM 3.1 request + output parsing into `Detection(box, confidence, mask)`, best match first. |
 | `check_api.py` | Smoke test: one cheap call to Spark (structured output), SAM and Voice Transcribe. |
-| `app.py` | The single FastAPI app: the portal under `/portal/*`, Teach-Once under `/app/*`, so everything is same-origin. |
+| `app.py` | The single FastAPI app: the portal under `/portal/*`, Teach-Once under `/app/*`, so everything is same-origin. Starts compile jobs and runs in background threads and streams run events to the dashboard. |
+| `templates/app/run.html` + `static/runs.js` | The live run dashboard. |
 | `portal.py` + `templates/portal/` | The Demoland TransitPass Portal, the fictional demo target, with drift levels. |
 | `gen_data.py` | Writes fake CSV rows (`data/rows.csv`) that pass the portal's validation. |
 | `workflow.py` | Workflow models (pydantic), `{{var}}` templating, immutable versioned files in `data/workflows/`. |
@@ -19,7 +20,7 @@
 | `recording.py` | Saves a teach recording, cleans up raw DOM events, converts media with ffmpeg. |
 | `static/recorder.js` + `templates/app/studio.html` | The teach studio: recording toolbar + the portal in a same-origin frame. |
 | `static/describe.js` | How an element is described (role, accessible name, label, css, box). Shared by the studio and, injected, by the healer. |
-| `examples/` | Committed sample workflows. Generated and healed workflows live in `data/workflows/` (git-ignored). |
+| `examples/` | Committed sample workflows and the measured `baseline_summary.json`. Generated and healed workflows live in `data/workflows/` (git-ignored). |
 | `teach.py` | The teach pipeline: cleans the recording, then transcribe → understand → compile → dry run → export. |
 | `understand.py` | Muse Spark watches the teach video with the event log and narration and returns a step graph. |
 | `compiler.py` | Muse Wonder turns the recorded skeleton + step graph into a workflow; lint, repair, export script. |
@@ -63,7 +64,7 @@ A target carries a **locator chain**, most robust first (role + accessible name,
 
 - Rows run sequentially, one fresh browser context per row (clean cookies, so per-row popups behave like a new visitor). Viewport 1280×800, device scale factor 1, so screenshot pixels equal CSS pixels.
 - A failing step stops the row with a typed failure: `locator_not_found`, `blocked_by_overlay` (the click hit another element, e.g. a modal), `check_failed` or `action_failed`. Steps marked `optional` are skipped on failure.
-- Output goes to `data/runs/<run_id>/`: `results.jsonl` (one line per row: status, outputs, duration, model calls, cost), `events.jsonl` (the event stream the dashboard will use), `summary.json`, and `steps/*.png` screenshots (every step of the first row, every failure, every row's last step).
+- Output goes to `data/runs/<run_id>/`: `results.jsonl` (one line per row: status, outputs, duration, model calls, cost), `events.jsonl` (the event stream the dashboard shows), `summary.json`, and `steps/*.png` screenshots (every step of the first row, every failure, every row's last step).
 
 `examples/pay-interstate-tax.v1.json` is hand-written; the teach pipeline generates the same format.
 
@@ -127,6 +128,26 @@ Measured on the demo portal (drift levels from the hand-written v1):
 | 3 (+ consent modal, session-notice page) | 3 (modal, page, notice) | ~25 s | ~$0.035 | 0 model calls, ~1.5 s/row |
 
 Heals only go forward: a patched step keeps its old locators as fallbacks, but a step whose control changed kind is fixed for the new site.
+
+## Dashboard
+
+Everything in the demo happens in the browser at `http://localhost:8000/app/`:
+
+1. **Teach** (`/app/teach/new`) and **Compile** (`/app/teach/<rec_id>`), as above. A compiled recording gets a **▶ Run 50 rows** button.
+2. **Run** from the home page: pick any workflow (compiled, healed or a sample), the number of rows and whether to heal. Rows come from `data/rows.csv`, generated with fake data if missing. One run at a time.
+3. **Portal redesign 0-3** in the header switches the demo portal's drift level live (`POST /portal/admin/drift`), also in the middle of a run.
+
+The run page (`/app/runs/<run_id>`) follows the run live:
+
+- **Cost meter:** this run's spend and model calls (only heals call models) next to what the measured computer-use agent would have spent on the same rows, and both at 10,000 rows a day. The agent numbers are the mean over every row in `data/baseline_summary.json` (or the committed copy in `examples/` when you haven't run the baseline yourself).
+- **Row grid:** running, healing (amber), done, healed (done with an amber ring) or failed.
+- **Latest screen:** the last screenshot the runner took (every step of the first row, then each row's last step and every failure).
+- **Events:** row results, failures and heals, newest first.
+- **Heal cards:** what broke, what the healer did, the screenshot it saw and the SAM 3.1 overlay, the time, cost and model calls, and the workflow diff (each patched step's action and first locator before and after, plus new interrupts).
+
+The page reads `GET /app/api/runs/<run_id>/events`, a server-sent event stream that tails the run's `events.jsonl`: each event's id is its line number, so a reconnecting browser resumes where it left off, and opening a finished run replays it. The stream ends with `run_done` (or `run_failed`).
+
+Measured in the browser: the hand-written v1, 50 rows, level 3 pressed after row 10 → 50/50 rows OK, 3 heals (v1 → v4), $0.046 and 11 model calls in total, 131 s. The agent would have needed ~$15 and ~1,350 model calls for the same 50 rows.
 
 ## Computer-use baseline
 

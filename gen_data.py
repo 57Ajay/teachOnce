@@ -37,15 +37,19 @@ def generate(n: int, seed: int, today: date | None = None) -> list[dict]:
     return [make_row(rng, today) for _ in range(n)]
 
 
+def write(path: Path, n: int = 50, seed: int = 7):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(generate(n, seed))
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--rows", type=int, default=50)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--out", type=Path, default=config.DATA_DIR / "rows.csv")
     args = ap.parse_args()
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=COLUMNS)
-        writer.writeheader()
-        writer.writerows(generate(args.rows, args.seed))
+    write(args.out, args.rows, args.seed)
     print(f"wrote {args.rows} rows to {args.out}")

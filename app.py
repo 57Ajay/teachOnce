@@ -1,22 +1,32 @@
+import asyncio
 import json
 import re
 import threading
+import time
+from datetime import datetime
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 import config
+import gen_data
 import portal
 import recording
+import run
 import teach
 import workflow
 
 REC_ID = re.compile(r"rec_\d{8}_\d{6}")
 MEDIA_FILES = {"teach.mp4", "narration.wav"}
 WORKFLOW_FILE = re.compile(r"[\w.-]+\.(json|py)")
+RUN_ID = re.compile(r"[\w-]+")
+RUN_FILE = re.compile(r"[\w.-]+\.png")
+END_EVENTS = {"run_done", "run_failed"}
 JOBS: dict[str, dict] = {}
+RUNS: dict[str, dict] = {}
 
 app = FastAPI(title="Teach-Once")
 app.include_router(portal.router)
@@ -40,7 +50,8 @@ def home():
 
 @app.get("/app/")
 def app_home(request: Request):
-    return templates.TemplateResponse(request, "app/home.html", {"recordings": recording.list_all()})
+    return templates.TemplateResponse(request, "app/home.html", {
+        "recordings": recording.list_all(), "workflows": workflow_choices(), "runs": list_runs()})
 
 
 @app.get("/app/teach/new")
@@ -115,3 +126,126 @@ def recording_media(rec_id: str, name: str):
     if name not in MEDIA_FILES or not path.exists():
         raise HTTPException(404)
     return FileResponse(path)
+
+
+@app.get("/app/workflows/diffs/{name}")
+def workflow_diff(name: str):
+    path = workflow.WORKFLOWS_DIR / "diffs" / name
+    if not WORKFLOW_FILE.fullmatch(name) or not path.exists():
+        raise HTTPException(404)
+    return FileResponse(path, media_type="application/json")
+
+
+def workflow_choices() -> list[str]:
+    """Workflow files that can be run, as paths relative to the repo: newest compiled or healed first, then samples."""
+    runtime = sorted(workflow.WORKFLOWS_DIR.glob("*.v*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    samples = sorted((config.ROOT / "examples").glob("*.v*.json"))
+    return [str(p.relative_to(config.ROOT)) for p in runtime + samples]
+
+
+def baseline_reference() -> dict | None:
+    """The measured computer-use agent, averaged over every row it ran (all drift levels)."""
+    summary = read_json(config.DATA_DIR / "baseline_summary.json") or read_json(config.ROOT / "examples" / "baseline_summary.json")
+    if not summary:
+        return None
+    levels = [level["baseline"] for level in summary["levels"].values()]
+    rows = sum(b["rows"] for b in levels)
+    mean = {k: round(sum(b["mean_per_row"][k] * b["rows"] for b in levels) / rows, 4)
+            for k in ("usd", "turns", "seconds", "input_tokens")}
+    return {"model": summary["model"], "rows": rows, "ok": sum(b["ok"] for b in levels), **mean}
+
+
+def list_runs() -> list[dict]:
+    runs = []
+    for d in sorted(config.RUNS_DIR.glob("*/"), reverse=True)[:20]:
+        summary = read_json(d / "summary.json")
+        state = RUNS.get(d.name, {}).get("state") or ("done" if summary else "incomplete")
+        runs.append({"run_id": d.name, "state": state, **(summary or {})})
+    return runs
+
+
+def run_dir_or_404(run_id: str):
+    path = config.RUNS_DIR / run_id
+    if not RUN_ID.fullmatch(run_id) or not (path.exists() or run_id in RUNS):
+        raise HTTPException(404, "run not found")
+    return path
+
+
+class RunIn(BaseModel):
+    workflow: str
+    rows: int = 50
+    heal: bool = True
+
+
+@app.post("/app/api/runs")
+def start_run(body: RunIn):
+    if body.workflow not in workflow_choices():
+        raise HTTPException(404, "workflow not found")
+    busy = next((rid for rid, r in RUNS.items() if r["state"] == "running"), None)
+    if busy:
+        raise HTTPException(409, f"{busy} is still running")
+    rows_csv = config.DATA_DIR / "rows.csv"
+    if not rows_csv.exists():
+        gen_data.write(rows_csv)
+    run_id = datetime.now().strftime("run_%Y%m%d_%H%M%S")
+    RUNS[run_id] = {"state": "running"}
+
+    def work():
+        try:
+            run.run(config.ROOT / body.workflow, rows_csv, limit=body.rows, run_id=run_id, heal=body.heal)
+            RUNS[run_id]["state"] = "done"
+        except (Exception, SystemExit) as e:
+            run_dir = config.RUNS_DIR / run_id
+            run_dir.mkdir(parents=True, exist_ok=True)
+            with (run_dir / "events.jsonl").open("a") as f:
+                f.write(json.dumps({"type": "run_failed", "ts": time.time(), "error": str(e)[:600]}) + "\n")
+            RUNS[run_id]["state"] = "failed"
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"run_id": run_id}
+
+
+@app.get("/app/runs/{run_id}")
+def view_run(request: Request, run_id: str):
+    run_dir_or_404(run_id)
+    return templates.TemplateResponse(request, "app/run.html", {"run_id": run_id, "baseline": baseline_reference()})
+
+
+@app.get("/app/runs/{run_id}/{kind}/{name}")
+def run_file(run_id: str, kind: str, name: str):
+    path = run_dir_or_404(run_id) / kind / name
+    if kind not in ("steps", "heals") or not RUN_FILE.fullmatch(name) or not path.exists():
+        raise HTTPException(404)
+    return FileResponse(path)
+
+
+@app.get("/app/api/runs/{run_id}/events")
+async def run_events(request: Request, run_id: str):
+    """Server-sent events: the run's events.jsonl from the start (or after Last-Event-ID), then live until the run ends."""
+    path = run_dir_or_404(run_id) / "events.jsonl"
+    skip = int(request.headers.get("last-event-id", -1)) + 1
+
+    async def stream():
+        n, offset, partial = 0, 0, b""
+        while not await request.is_disconnected():
+            active = RUNS.get(run_id, {}).get("state") == "running"  # read before the file, so nothing written after is missed
+            if path.exists():
+                with path.open("rb") as f:
+                    f.seek(offset)
+                    chunk = f.read()
+                    offset += len(chunk)
+                *lines, partial = (partial + chunk).split(b"\n")
+                for line in lines:
+                    n += 1
+                    if n > skip:
+                        yield f"id: {n - 1}\ndata: {line.decode()}\n\n"
+                    if json.loads(line)["type"] in END_EVENTS:
+                        return
+                if lines:
+                    continue
+            if not active:
+                yield 'data: {"type": "stream_end"}\n\n'
+                return
+            await asyncio.sleep(0.3)
+
+    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
