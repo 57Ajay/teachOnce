@@ -11,95 +11,9 @@
   let typingSince = new WeakMap(); // field -> when typing started, so a fill is timed at its start
 
   const now = () => Math.round(performance.now() - t0);
-  const clean = (s) => (s || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  const { describe } = window.TeachOnceDescribe;
   const status = (s) => (statusEl.textContent = s);
   const once = (el, name) => new Promise((res) => el.addEventListener(name, res, { once: true }));
-
-  function role(el) {
-    if (el.getAttribute("role")) return el.getAttribute("role");
-    const tag = el.tagName.toLowerCase();
-    const type = (el.getAttribute("type") || "text").toLowerCase();
-    if (tag === "a" && el.hasAttribute("href")) return "link";
-    if (tag === "button") return "button";
-    if (tag === "select") return el.multiple ? "listbox" : "combobox";
-    if (tag === "textarea") return "textbox";
-    if (tag === "tr") return "row";
-    if (/^h[1-6]$/.test(tag)) return "heading";
-    if (tag === "input") {
-      if (["checkbox", "radio"].includes(type)) return type;
-      if (["submit", "button", "reset", "image"].includes(type)) return "button";
-      if (["text", "email", "tel", "search", "url"].includes(type)) return "textbox";
-      if (type === "number") return "spinbutton";
-    }
-    return "";
-  }
-
-  function labelText(el) {
-    const doc = el.ownerDocument;
-    if (el.id) {
-      const label = doc.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-      if (label) return clean(label.innerText);
-    }
-    const wrap = el.closest("label");
-    return wrap ? clean(wrap.innerText) : "";
-  }
-
-  function accessibleName(el) {
-    if (el.getAttribute("aria-label")) return clean(el.getAttribute("aria-label"));
-    const by = el.getAttribute("aria-labelledby");
-    if (by) return clean(by.split(/\s+/).map((id) => el.ownerDocument.getElementById(id)?.innerText).join(" "));
-    const label = labelText(el);
-    if (label) return label;
-    const tag = el.tagName.toLowerCase();
-    if (["a", "button", "tr", "td", "th"].includes(tag) || /^h[1-6]$/.test(tag)) return clean(el.innerText);
-    if (tag === "input" && ["submit", "button"].includes(el.type)) return clean(el.value);
-    return clean(el.getAttribute("placeholder") || el.getAttribute("title"));
-  }
-
-  function cssPath(el) {
-    const doc = el.ownerDocument;
-    if (el.id && doc.querySelectorAll(`#${CSS.escape(el.id)}`).length === 1) return `#${CSS.escape(el.id)}`;
-    const parts = [];
-    for (let node = el; node && node.nodeType === 1 && node !== doc.body; node = node.parentElement) {
-      let part = node.tagName.toLowerCase();
-      if (node.id) part = `#${CSS.escape(node.id)}`;
-      else {
-        const same = [...(node.parentElement?.children || [])].filter((c) => c.tagName === node.tagName);
-        if (same.length > 1) part += `:nth-of-type(${same.indexOf(node) + 1})`;
-      }
-      parts.unshift(part);
-      const selector = parts.join(" > ");
-      if (doc.querySelectorAll(selector).length === 1) return selector;
-    }
-    return parts.join(" > ");
-  }
-
-  function xpath(el) {
-    const parts = [];
-    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
-      const same = [...(node.parentElement?.children || [])].filter((c) => c.tagName === node.tagName);
-      parts.unshift(node.tagName.toLowerCase() + (same.length > 1 ? `[${same.indexOf(node) + 1}]` : ""));
-    }
-    return "/" + parts.join("/");
-  }
-
-  function describe(el) {
-    const r = el.getBoundingClientRect();
-    return {
-      tag: el.tagName.toLowerCase(),
-      type: el.getAttribute("type") || "",
-      role: role(el),
-      accessible_name: accessibleName(el),
-      label_text: labelText(el),
-      placeholder: el.getAttribute("placeholder") || "",
-      text: clean(el.innerText),
-      id: el.id || "",
-      name: el.getAttribute("name") || "",
-      css: cssPath(el),
-      xpath: xpath(el),
-      bbox: [r.left, r.top, r.right, r.bottom].map(Math.round),
-    };
-  }
 
   function valueOf(el) {
     if (el.type === "password") return "***";

@@ -58,17 +58,17 @@ def test_skeleton_uses_recorded_locators_and_navigation():
 
 def wonder_output(**overrides):
     loc = lambda sel: {"kind": "css", "role": None, "name": None, "text": None, "selector": sel}
-    target = lambda sel, bbox: {"description": "", "noun_phrase": "", "locators": [loc(sel)], "anchor_bbox": bbox}
-    step = lambda i, action, value, sel, bbox=(10, 20, 110, 40), check="none", output=None: {
+    target = lambda sel: {"description": "", "noun_phrase": "", "locators": [loc(sel)]}
+    step = lambda i, action, value, sel, check="none", output=None: {
         "id": f"s{i:02d}", "intent": "", "action": action, "value": value, "output": output, "pattern": None,
-        "optional": False, "target": target(sel, list(bbox)) if sel else None, "check": {"kind": check, "value": None}}
+        "optional": False, "target": target(sel) if sel else None, "check": {"kind": check, "value": None}}
     out = {
         "id": "demo", "name": "Demo", "start_url": "{{PORTAL_URL}}/form", "secrets": [],
         "variables": [{"name": "reg", "column": "vehicle_no", "type": "string", "example": "x", "description": ""},
                       {"name": "mobile", "column": "mobile", "type": "string", "example": "x", "description": ""}],
         "steps": [step(1, "goto", "{{PORTAL_URL}}/form", None),
                   step(2, "fill", "{{reg}}", "#reg", check="value_equals"),
-                  step(3, "fill", "{{mobile}}", "#mobile", bbox=(10, -40, 110, -20)),
+                  step(3, "fill", "{{mobile}}", "#mobile"),
                   step(4, "click", None, "#go"),
                   step(5, "extract", None, "#go", output="receipt_no")],
     }
@@ -79,12 +79,16 @@ GRAPH = {"outputs": [{"name": "receipt_no", "page": "/done", "where": "", "examp
 COLUMNS = ["vehicle_no", "mobile"]
 
 
-def test_to_workflow_drops_nulls_and_offscreen_anchors():
+def test_to_workflow_drops_nulls_and_anchors_come_from_the_recording():
     wf = compiler.to_workflow(wonder_output(), "rec_x")
     assert isinstance(wf, Workflow) and wf.version == 1 and wf.source_recording == "rec_x"
+    assert wf.steps[1].target.locators[0].model_dump(exclude_none=True) == {"kind": "css", "selector": "#reg"}
+    events = teach.final_pass(RECORDED)
+    events[2]["target"] = dict(events[2]["target"], bbox=[10, -40, 110, -20])  # scrolled out of view
+    compiler.add_anchors(wf, events)
     assert wf.steps[1].target.anchor.bbox == [10, 20, 110, 40]
     assert wf.steps[2].target.anchor is None
-    assert wf.steps[1].target.locators[0].model_dump(exclude_none=True) == {"kind": "css", "selector": "#reg"}
+    assert wf.steps[4].target.anchor is None  # extract steps have no recorded element
 
 
 def test_lint_accepts_a_faithful_workflow_and_names_each_problem():

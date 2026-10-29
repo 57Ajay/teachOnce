@@ -14,7 +14,7 @@ LOCATOR_FIELDS = {"role": ("role", "name"), "label": ("text",), "placeholder": (
 
 class CompileError(RuntimeError):
     pass
-from recording import strip_required
+from recording import stable_css, strip_required
 from workflow import TEMPLATE, Anchor, Workflow
 
 _NULLABLE = {"type": ["string", "null"]}
@@ -28,10 +28,9 @@ _LOCATOR = {
 _TARGET = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["description", "noun_phrase", "locators", "anchor_bbox"],
+    "required": ["description", "noun_phrase", "locators"],
     "properties": {"description": {"type": "string"}, "noun_phrase": {"type": "string"},
-                   "locators": {"type": "array", "items": _LOCATOR},
-                   "anchor_bbox": {"type": "array", "items": {"type": "number"}}},
+                   "locators": {"type": "array", "items": _LOCATOR}},
 }
 _STEP = {
     "type": "object",
@@ -88,7 +87,7 @@ def skeleton(events: list[dict]) -> list[dict]:
             locators.append({"kind": "label", "text": strip_required(t["label_text"])})
         if t.get("placeholder"):
             locators.append({"kind": "placeholder", "text": t["placeholder"]})
-        if t.get("css"):
+        if stable_css(t.get("css")):
             locators.append({"kind": "css", "selector": t["css"]})
         nxt = events[i + 1] if i + 1 < len(events) else None
         out.append({
@@ -96,7 +95,7 @@ def skeleton(events: list[dict]) -> list[dict]:
             "action": e["action"],
             "page": e["url"],
             "navigated_to": nxt["url"] if nxt and nxt["type"] == "navigation" else None,
-            "recorded_value": e.get("value") if e["type"] == "change" else None,
+            "recorded_value": (name if t.get("type") == "radio" else e.get("value")) if e["type"] == "change" else None,
             "element": f"{t.get('tag')}[type={t.get('type')}]" if t.get("type") else t.get("tag"),
             "locators": locators,
             "bbox": t.get("bbox"),
@@ -105,7 +104,7 @@ def skeleton(events: list[dict]) -> list[dict]:
 
 
 def to_workflow(out: dict, rec_id: str) -> Workflow:
-    """Wonder's strict JSON uses nulls and a flat anchor bbox; the workflow model uses defaults and Anchor."""
+    """Wonder's strict JSON uses nulls; the workflow model uses defaults."""
     def strip_nulls(d):
         return {k: v for k, v in d.items() if v is not None}
 
@@ -114,11 +113,7 @@ def to_workflow(out: dict, rec_id: str) -> Workflow:
         step = strip_nulls(s)
         step["check"] = strip_nulls(s["check"])
         if s["target"]:
-            target = dict(s["target"], locators=[strip_nulls(loc) for loc in s["target"]["locators"]])
-            bbox = target.pop("anchor_bbox")
-            if len(bbox) == 4 and bbox[2] > bbox[0] and bbox[3] > bbox[1] >= 0:
-                target["anchor"] = Anchor(bbox=bbox)
-            step["target"] = target
+            step["target"] = dict(s["target"], locators=[strip_nulls(loc) for loc in s["target"]["locators"]])
         steps.append(step)
     return Workflow.model_validate({**out, "version": 1, "source_recording": rec_id, "steps": steps})
 
@@ -184,7 +179,17 @@ def compile_workflow(events: list[dict], graph: dict, columns: list[str], rec_id
         return compile_workflow(events, graph, columns, rec_id, feedback="\n".join(problems), previous=out)
     if problems:
         raise CompileError("; ".join(problems))
+    add_anchors(wf, events)
     return wf, out
+
+
+def add_anchors(wf: Workflow, events: list[dict]):
+    """Each action step's anchor is where the recorder saw its element (lint guarantees one step per action)."""
+    actions = [st for st in wf.steps if st.action not in ("goto", "extract")]
+    for st, entry in zip(actions, skeleton(events)):
+        bbox = entry["bbox"]
+        if st.target and bbox and bbox[2] > bbox[0] and bbox[3] > bbox[1] >= 0:
+            st.target.anchor = Anchor(bbox=bbox)
 
 
 def export_script(wf: Workflow, path: Path) -> Path:

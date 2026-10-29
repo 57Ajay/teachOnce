@@ -12,11 +12,14 @@
 | `app.py` | The single FastAPI app: the portal under `/portal/*`, Teach-Once under `/app/*`, so everything is same-origin. |
 | `portal.py` + `templates/portal/` | The Demoland TransitPass Portal, the fictional demo target, with drift levels. |
 | `gen_data.py` | Writes fake CSV rows (`data/rows.csv`) that pass the portal's validation. |
-| `workflow.py` | Workflow models (pydantic), `{{var}}` templating, immutable versioned files in `workflows/`. |
+| `workflow.py` | Workflow models (pydantic), `{{var}}` templating, immutable versioned files in `data/workflows/`. |
 | `locate.py` | Resolves a target's locator chain to exactly one visible, enabled element. |
-| `run.py` | The batch interpreter: runs a workflow over CSV rows with no model calls on the happy path. |
+| `run.py` | The batch interpreter: runs a workflow over CSV rows with no model calls on the happy path; calls the healer when a step breaks. |
+| `heal.py` | Self-healing: Muse Spark triages what changed, SAM 3.1 grounds the element, the patch is verified and saved as the next version. |
 | `recording.py` | Saves a teach recording, cleans up raw DOM events, converts media with ffmpeg. |
 | `static/recorder.js` + `templates/app/studio.html` | The teach studio: recording toolbar + the portal in a same-origin frame. |
+| `static/describe.js` | How an element is described (role, accessible name, label, css, box). Shared by the studio and, injected, by the healer. |
+| `examples/` | Committed sample workflows. Generated and healed workflows live in `data/workflows/` (git-ignored). |
 | `teach.py` | The teach pipeline: cleans the recording, then transcribe → understand → compile → dry run → export. |
 | `understand.py` | Muse Spark watches the teach video with the event log and narration and returns a step graph. |
 | `compiler.py` | Muse Wonder turns the recorded skeleton + step graph into a workflow; lint, repair, export script. |
@@ -50,17 +53,19 @@ The server reads fields through the same rename map, and each form posts the lay
 
 ## Workflows and the runner
 
-A workflow (`workflows/<id>.v<N>.json`) is a list of steps. Each step has an `action` (`goto`, `click`, `fill`, `fill_date`, `select`, `check`, `uncheck`, `press`, `wait_for`, `extract`, `assert_text`), an optional `target`, a templated `value`, and a `check` that proves it worked (`value_equals`, `url_contains`, `text_visible`, `element_visible`, `element_hidden`). Values and locator text can use `{{variable}}` (CSV columns), `{{secret}}` (env vars) and `{{PORTAL_URL}}`.
+A workflow (`<id>.v<N>.json`) is a list of steps. Each step has an `action` (`goto`, `click`, `fill`, `fill_date`, `select`, `check`, `uncheck`, `press`, `wait_for`, `extract`, `assert_text`), an optional `target`, a templated `value`, and a `check` that proves it worked (`value_equals`, `url_contains`, `text_visible`, `element_visible`, `element_hidden`). Values and locator text can use `{{variable}}` (CSV columns), `{{secret}}` (env vars) and `{{PORTAL_URL}}`.
 
 A target carries a **locator chain**, most robust first (role + accessible name, label, placeholder, text, CSS). The runner polls the chain until one locator matches exactly one visible, enabled element. That is why cosmetic drift (renamed ids) often needs no heal: the role/label locators still match.
 
-`uv run run.py workflows/pay-interstate-tax.v1.json data/rows.csv [--start N] [--limit N] [--headed]`
+`uv run run.py examples/pay-interstate-tax.v1.json data/rows.csv [--start N] [--limit N] [--headed] [--no-heal]`
 
 - Rows run sequentially, one fresh browser context per row (clean cookies, so per-row popups behave like a new visitor). Viewport 1280×800, device scale factor 1, so screenshot pixels equal CSS pixels.
 - A failing step stops the row with a typed failure: `locator_not_found`, `blocked_by_overlay` (the click hit another element, e.g. a modal), `check_failed` or `action_failed`. Steps marked `optional` are skipped on failure.
 - Output goes to `data/runs/<run_id>/`: `results.jsonl` (one line per row: status, outputs, duration, model calls, cost), `events.jsonl` (the event stream the dashboard will use), `summary.json`, and `steps/*.png` screenshots (every step of the first row, every failure, every row's last step).
 
-`workflows/pay-interstate-tax.v1.json` is hand-written for now; the teach pipeline will generate these.
+`examples/pay-interstate-tax.v1.json` is hand-written; the teach pipeline generates the same format.
+
+A workflow can also carry `interrupts`: things that can get in the way (a consent modal, an interstitial page) and the button that clears them. Before each step, and while a URL check waits, the runner clicks any interrupt that is showing. No model is involved; the healer learns them.
 
 ## Teaching (the recorder)
 
@@ -86,13 +91,40 @@ A recording lands in `data/recordings/<rec_id>/`:
 2. **Transcribe** (Voice Transcribe): narration → timestamped turns, with the field labels as keywords. Keywords over 30 characters are rejected by the API, so they are filtered out. No narration is fine.
 3. **Understand** (Muse Spark, reasoning effort high): the 720p/10 fps video + the event table + the narration → a step graph: intent, per-row variable or constant (with the reason), a visual description and a short SAM noun phrase per target, and the task's outputs. The event log is the ground truth for actions; Spark adds meaning. Cached in `step_graph.json`.
 4. **Compile** (Muse Wonder, effort medium): a deterministic skeleton (one entry per action, with locator candidates built from what the recorder saw) + the step graph + the CSV columns → a workflow under a strict JSON schema. It maps variables to CSV columns, templates values, turns masked passwords into secrets, adds checks and an extract step per output.
+Anchors (where each element was during teaching) come from the recording, not from Wonder. Only id-based CSS selectors are kept as locators: a positional path like `div > div > button` can match a different element after a redesign.
+
 5. **Lint** (no model): one step per recorded action, an extract per output, no CSS selector that wasn't recorded, every `{{var}}` declared, every column in the CSV. Problems go back to Wonder for one repair call.
 6. **Dry run**: the draft runs at drift 0 on the recorded example **plus the first CSV rows**, which catches workflows that only fit the example (e.g. a regex that doesn't allow "3,025.00"). A failure goes back to Wonder with the error for one repair call.
-7. **Export** (Muse Wonder, effort low): a standalone Playwright script (`workflows/export_<id>.py`) with the same steps, as the visible "compiled program". It reads secrets from the environment (`PORTAL_PASSWORD=demo123 python workflows/export_<id>.py data/rows.csv`).
+7. **Export** (Muse Wonder, effort low): a standalone Playwright script (`data/workflows/export_<id>.py`) with the same steps, as the visible "compiled program". It reads secrets from the environment (`PORTAL_PASSWORD=demo123 python data/workflows/export_<id>.py data/rows.csv`).
 
-The workflow is saved as `workflows/<id>.v<N>.json`; the recording folder gets the drafts, `examples.csv` and `compiled.json` (cost, time, file names).
+The workflow is saved as `data/workflows/<id>.v<N>.json`; the recording folder gets the drafts, `examples.csv` and `compiled.json` (cost, time, file names).
 
 Measured on a real 100 s recording: Spark ~37 s / $0.06 (26k input tokens), Wonder compile ~20 s / $0.13–0.16, export ~18 s / $0.09. About $0.25–0.40 per teach.
+
+## Self-healing
+
+When a step fails (`locator_not_found`, `blocked_by_overlay`, or a `check_failed` such as landing on an unexpected page), the runner hands the live page to `heal.py`:
+
+1. **Look.** A full-page screenshot plus a numbered list of the page's interactive elements (role, accessible name, label, placeholder, box), from `describe.js`.
+2. **Triage (Muse Spark, effort medium, one call per page).** Spark gets the screenshot, the element list, the failing step and every later step on the same page whose locators no longer resolve. It answers per step: `moved`, `control_changed` (radios became a dropdown), `split_into_parts` (a date input became day/month/year dropdowns) or `not_found`, with the element's ref and a short *visual* noun phrase. Or it reports an **interruption** (a consent modal, a session-notice page) and the button that clears it.
+3. **Ground (SAM 3.1).** SAM segments every control matching each noun phrase ("white input box", "dropdown menu", "blue button"); one call per unique phrase, in parallel. The detection that lands on Spark's pick is the match: `sam+spark` means both models agree. If SAM has nothing there, Spark's accessibility pick is used (`a11y_pick`).
+4. **Patch.** New locators are prepended (old ones kept as fallbacks), the anchor is updated, controls that changed kind get a new action, split dates get `parts`, interruptions become workflow `interrupts`.
+5. **Verify** by running the failing step (or only its check, when the action already happened and the page in between was the interruption).
+6. **Version.** Saved as the next immutable version with a diff in `data/workflows/diffs/`. Every later row uses it, with zero model calls.
+
+Two attempts per heal. Everything is logged per run: `heals.jsonl` (failure, what changed, path, latency, cost) and `heals/<id>_before.png`, `_overlay.png` (SAM masks and labels drawn on the screenshot), `_triage.json`.
+
+**What we learned about SAM on web UIs.** SAM segments visual concepts, not meanings: "input box" returns all seven text fields on the form, "dropdown menu" all four dropdowns, "checkbox" the checkbox, but "registration number text field" returns nothing, because SAM doesn't read labels. So Spark decides *which* element (meaning), and SAM confirms *where* it is and draws its exact mask (geometry). On the redesigned form both agreed on 8 of 9 elements; the small day/month/year dropdowns were not segmented and came from Spark's pick.
+
+Measured on the demo portal (drift levels from the hand-written v1):
+
+| Level | Heals on the first row | Time | Cost | Later rows |
+|---|---|---|---|---|
+| 1 (renamed ids, moved + relabelled button) | 1 (button) | ~7 s | ~$0.01 | 0 model calls |
+| 2 (+ reworded labels, split date, radios → dropdown) | 1 page heal, 9 steps | ~10 s | ~$0.02 | 0 model calls |
+| 3 (+ consent modal, session-notice page) | 3 (modal, page, notice) | ~25 s | ~$0.035 | 0 model calls, ~1.5 s/row |
+
+Heals only go forward: a patched step keeps its old locators as fallbacks, but a step whose control changed kind is fixed for the new site.
 
 ## Record/replay cache
 
