@@ -63,3 +63,18 @@ def test_drift_fails_cleanly_without_heal(rows_csv, base_url, level, step_id, ki
     assert summary["failed"] == 1
     assert (result["error"]["step_id"], result["error"]["kind"]) == (step_id, kind)
     assert (config.RUNS_DIR / f"drift{level}" / "steps" / f"000_{step_id}.png").exists()
+
+
+def test_a_step_runs_in_whichever_shape_the_site_has_now(rows_csv, base_url, monkeypatch, tmp_path):
+    """A date healed into day/month/year dropdowns still works after the site switches back to a date input."""
+    monkeypatch.setattr(meta_client, "_post", lambda *a, **kw: pytest.fail("no model calls expected"))
+    wf = workflow.load(WF)
+    s11 = next(s for s in wf.steps if s.id == "s11")
+    s11.variants = [workflow.Variant(**s11.model_dump(include={"action", "target", "value", "check", "parts"}))]
+    s11.parts = [workflow.DatePart(unit=unit, target=workflow.Target(locators=[workflow.Locator(kind="role", role="combobox", name=name)]))
+                 for unit, name in (("day", "Day"), ("month", "Month"), ("year", "Year"))]
+    path = tmp_path / "shapes.v1.json"
+    path.write_text(wf.model_dump_json())
+    set_drift(base_url, 0)
+    summary = run.run(path, rows_csv, limit=1, run_id="shapes", heal=False)
+    assert (summary["ok"], summary["model_calls"]) == (1, 0)

@@ -66,6 +66,39 @@ def clear_interrupts(ctx: RowContext) -> bool:
     return False
 
 
+def screenshot(page: Page, **kw) -> bytes | None:
+    """Headless Chromium sometimes can't capture a page that is still settling; retry briefly, then give up."""
+    for _ in range(3):
+        try:
+            page.wait_for_load_state()
+            return page.screenshot(**kw)
+        except PlaywrightError:
+            page.wait_for_timeout(250)
+    return None
+
+
+def shapes(step: Step) -> list[Step]:
+    """The step as last healed, then the shapes it had before (variants)."""
+    return [step] + [step.model_copy(update=dict(v)) for v in step.variants]
+
+
+def resolves_now(ctx: RowContext, step: Step) -> bool:
+    targets = [p.target for p in step.parts] or ([step.target] if step.target else [])
+    return bool(targets) and all(locate.resolve(ctx.page, t, ctx.values, 0) for t in targets)
+
+
+def current_shape(ctx: RowContext, step: Step) -> Step | None:
+    """The shape of the step whose controls are on the page now, or None if none shows up in time."""
+    deadline = time.monotonic() + step.timeout_ms / 1000
+    while True:
+        for shape in shapes(step):
+            if resolves_now(ctx, shape):
+                return shape
+        if time.monotonic() > deadline:
+            return None
+        ctx.page.wait_for_timeout(POLL_MS)
+
+
 def date_parts(iso: str) -> dict:
     y, m, d = iso.split("-")
     return {"year": y, "month": m, "day": d}
@@ -106,8 +139,12 @@ def verify(ctx: RowContext, step: Step, el, value: str | None):
 
 def execute(ctx: RowContext, step: Step):
     page, t = ctx.page, step.timeout_ms
-    value = workflow.render(step.value, ctx.values) if step.value is not None else None
     clear_interrupts(ctx)
+    if step.variants:
+        step = current_shape(ctx, step)
+        if step is None:
+            raise StepFailed("locator_not_found", "no shape of this step matches the page")
+    value = workflow.render(step.value, ctx.values) if step.value is not None else None
     el = None
     targets = [p.target for p in step.parts] if step.parts else [step.target] if step.target else []
     found = [locate.resolve(page, target, ctx.values, t) for target in targets]
@@ -164,8 +201,7 @@ def run_row(browser, wf: Workflow, row_idx: int, row: dict, run_dir: Path, emit,
 
     def shoot(step_id):
         rel = f"steps/{row_idx:03d}_{step_id}.png"
-        ctx.page.screenshot(path=run_dir / rel)
-        return rel
+        return rel if screenshot(ctx.page, path=run_dir / rel) else None
 
     i = 0
     while i < len(wf.steps):

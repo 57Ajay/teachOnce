@@ -39,7 +39,8 @@ def test_run_started_from_the_dashboard_streams_its_events(base_url, tmp_path, m
     stream = read_stream(url)
     ids, events = stream[0::2], stream[1::2]
     assert ids == list(range(len(events)))
-    assert events[0]["type"] == "run_start" and events[-1]["type"] == "run_done"
+    assert events[0]["type"] == "run_start"
+    assert events[-1]["type"] == "run_done", events[-1]
     assert [e["status"] for e in events if e["type"] == "row_done"] == ["ok", "ok"]
     assert (tmp_path / "rows.csv").exists()
 
