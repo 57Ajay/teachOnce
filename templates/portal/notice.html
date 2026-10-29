@@ -4,7 +4,7 @@
   <h1>Session notice</h1>
   <p class="{{ c('lead') }}">For your security, sessions on this portal expire after 15 minutes of inactivity. Please keep your payment details ready before you continue.</p>
   <form method="get" action="/portal/tax/review">
-    <button class="{{ c('btn') }}" id="{{ c('notice_continue') }}" type="submit">Continue</button>
+    <button class="{{ c('btn') }}" id="{{ c('notice_continue') }}" type="submit">{{ nav.notice }}</button>
   </form>
 </div>
 {% endblock %}

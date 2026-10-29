@@ -9,7 +9,7 @@
     <tr><th>Amount</th><td class="{{ c('amount') }}">D$ {{ '{:,.2f}'.format(amount) }}</td></tr>
   </table>
   <form method="post" action="/portal/tax/pay" class="{{ c('actions') }}">
-    <button class="{{ c('btn') }}" id="{{ c('pay_btn') }}" type="submit">Pay Now (Demo)</button>
+    <button class="{{ c('btn') }}" id="{{ c('pay_btn') }}" type="submit">{{ nav.pay }}</button>
   </form>
 </div>
 {% endblock %}

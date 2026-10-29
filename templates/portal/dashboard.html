@@ -4,7 +4,7 @@
 <h1>Welcome, {{ user }}</h1>
 <p class="{{ c('lead') }}">Choose a service to continue.</p>
 <div class="{{ c('tiles') }}">
-  <a class="{{ c('tile') }}" id="{{ c('tile_tax') }}" href="/portal/tax/new"><strong>Pay Interstate Vehicle Tax</strong><p>Pay entry tax for vehicles crossing state borders.</p></a>
+  <a class="{{ c('tile') }}" id="{{ c('tile_tax') }}" href="/portal/tax/new"><strong>{{ nav.tile }}</strong><p>Pay entry tax for vehicles crossing state borders.</p></a>
   <div class="{{ c('tile') }} {{ c('tile-off') }}"><strong>Apply for Route Permit</strong><p>Coming soon.</p></div>
   <div class="{{ c('tile') }} {{ c('tile-off') }}"><strong>Check Challan Status</strong><p>Coming soon.</p></div>
 </div>
