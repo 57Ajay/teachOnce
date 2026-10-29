@@ -24,6 +24,7 @@
 | `understand.py` | Muse Spark watches the teach video with the event log and narration and returns a step graph. |
 | `compiler.py` | Muse Wonder turns the recorded skeleton + step graph into a workflow; lint, repair, export script. |
 | `prompts.py` | All prompts, with version tags that are logged with each call. |
+| `baseline.py` | The comparison: a pure computer-use agent (Muse Spark) doing the same task from screenshots, per row. Writes `data/baseline_summary.json`. |
 
 ## Meta Model API notes
 
@@ -34,6 +35,7 @@ Verified against the live API:
 - **Structured output (Responses API):** `text={"format": {"type": "json_schema", "name": ..., "schema": ..., "strict": true}}`.
 - **Video (Spark):** upload an mp4 to `POST /files` (`purpose=user_data`), then reference it as `{"type": "input_video", "file_id": ...}` (`input_file` works too). An 8 s 720p/10 fps clip is ~2.1k input tokens. Spark reads typed values well but misses clicks when no cursor is visible, so the DOM event log stays the source of truth for actions.
 - **SAM 3.1:** a plain (non-streamed) `POST /responses` with `input_text` (a short noun phrase) + `input_image` as a **data URL** works. `metadata={"include_confidence": "true"}` adds `c=` to each box. Boxes are source pixels. It can return several matches (e.g. two buttons); pick by confidence. Cost is reported as `usage.images_processed`.
+- **Computer use (Spark):** `tools=[{"type": "computer"}]` on `/responses`, no display size or environment needed. The answer holds `computer_call` items with an **`actions` list** (Spark batches, e.g. click, type, Tab, type, Enter in one call): `click{button,x,y}`, `type{text}`, `keypress{keys}`, `scroll{x,y,scroll_x,scroll_y}`, ... Every call carries `pending_safety_checks` (code `computer_action_requires_confirmation`) and a `meta_safety_replay_receipt`. Reply with `{"type": "computer_call_output", "call_id": ..., "acknowledged_safety_checks": <the pending checks, as given>, "output": {"type": "computer_screenshot", "image_url": <PNG data URL>}}` and `previous_response_id`. Without the acknowledgement: 400 "Every pending computer safety check must be acknowledged exactly once". The receipt does not need to be echoed. Coordinates are screenshot pixels, but `scroll_y` is in wheel notches (Spark sends 5 or 6; `baseline.py` scrolls 100 px per notch). The history is kept server-side, so input tokens grow every turn (only partly cached). **A chain is capped:** the 30th request of a computer-use `previous_response_id` chain fails with a generic 400 "The request contains invalid parameters" (reproduced on a one-button page; 31 screenshots in one request and a 35-turn chain without the computer tool are fine).
 - **Voice Transcribe:** multipart `POST /asr/transcribe` with a `request` JSON part and an `audio` WAV part (mono, 16-bit, 24 kHz). `ENDPOINTING` mode returns `turns` with `startMs`/`endMs`.
 
 ## Demoland TransitPass Portal

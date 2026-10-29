@@ -58,6 +58,13 @@ Requirements:
 
 Reply with only the Python source code, no markdown fences, no explanation."""
 
+BASELINE_VERSION = "baseline-v1"
+BASELINE = """You operate a web browser to complete a data-entry task on the Demoland TransitPass Portal, a fictional demo site. After every action you get a new screenshot of the browser (1280x800).
+
+Complete the whole task on your own. Everything is fake test data and the payment is a demo button, so you are authorized to submit the form and pay without asking for confirmation.
+
+When the payment receipt is shown, reply with the receipt number and stop."""
+
 HEAL_VERSION = "heal-v2"
 HEAL = """You repair a browser automation that broke because the website changed. The automation was recorded on the old version of the site; ids, labels, wording, layout and even the kind of control may have changed since.
 
