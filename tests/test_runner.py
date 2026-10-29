@@ -1,6 +1,7 @@
 import csv
 import json
 
+import httpx
 import pytest
 
 import config
@@ -77,4 +78,25 @@ def test_a_step_runs_in_whichever_shape_the_site_has_now(rows_csv, base_url, mon
     path.write_text(wf.model_dump_json())
     set_drift(base_url, 0)
     summary = run.run(path, rows_csv, limit=1, run_id="shapes", heal=False)
+    assert (summary["ok"], summary["model_calls"]) == (1, 0)
+
+
+def test_format_date_follows_the_fields_pattern():
+    assert run.format_date("2026-11-03", "DD/MM/YYYY") == "03/11/2026"
+    assert run.format_date("2026-11-03", "mm-dd-yyyy") == "11-03-2026"
+    assert run.format_date("2026-11-03", "e.g. 3 Nov") == "2026-11-03"
+
+
+def test_modern_controls_need_no_model_calls(rows_csv, base_url, monkeypatch):
+    """Custom dropdowns (a button that opens a list) and a DD/MM/YYYY text date, same labels: no heal needed."""
+    import portal
+
+    monkeypatch.setattr(meta_client, "_post", lambda *a, **kw: pytest.fail("no model calls expected"))
+    monkeypatch.setattr(portal, "random_traits", lambda seed: portal.LEVEL0 | dict(
+        vehicle_type="custom", states="custom", tax_period="radio", date="text"))
+    httpx.post(f"{base_url}/portal/admin/drift", json={"seed": 1}).raise_for_status()
+    try:
+        summary = run.run(WF, rows_csv, limit=1, run_id="modern", heal=False)
+    finally:
+        set_drift(base_url, 0)
     assert (summary["ok"], summary["model_calls"]) == (1, 0)

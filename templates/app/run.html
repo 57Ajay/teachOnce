@@ -40,6 +40,10 @@
 </div>
 <p class="muted" id="wf" style="margin:0"></p>
 
+<div class="card" id="stopped" hidden style="border-color:var(--rec);margin-top:14px">
+  <b style="color:var(--rec)">Run stopped: this needs a person.</b> <span id="stopped-reason"></span>
+  <div class="muted" style="font-size:13px">No more rows were tried and no more model calls were made. Fix the cause (or re-teach), then run the remaining rows.</div>
+</div>
 <div class="meter">
   <div class="card ours">
     <div class="label">Teach-Once, this run</div>
@@ -142,8 +146,9 @@
     table.appendChild(el("tr")).append(el("th", "Step"), el("th", `v${ev.from_v}`), el("th", `v${ev.to_v}`));
     for (const ch of diff.steps) {
       const before = ch.before, after = ch.after;
+      if (before && after.optional && !before.optional) after.action += " (skipped while missing)";
       const parts = (after.parts || []).map((p) => `${p.unit} → ${locator(p.target.locators[0])}`).join("; ");
-      const was = `${before.action} · ${locator(before.target?.locators?.[0])}`;
+      const was = before ? `${before.action} · ${locator(before.target?.locators?.[0])}` : "(new step)";
       const now = `${after.action} · ${parts || locator(after.target?.locators?.[0])}`;
       table.appendChild(el("tr")).append(el("td", ch.step_id), el("td", was), el("td", now));
     }
@@ -155,14 +160,15 @@
   function addHeal(ev) {
     $("no-heals")?.remove();
     const card = el("div", undefined, "card heal-card");
-    const verdict = ev.verified ? `v${ev.from_v} → v${ev.to_v}` : "unrecoverable";
+    const verdict = ev.verified ? `v${ev.from_v} → v${ev.to_v}` : ev.needs_human ? "needs a person" : "unrecoverable";
     card.appendChild(el("h2", `${ev.heal} · row ${ev.row} · step ${ev.step_id} · ${ev.failure} · ${verdict}`));
     card.appendChild(el("div", `${(ev.latency_ms / 1000).toFixed(1)} s · ${money(ev.cost_usd, 3)} · ${ev.model_calls} model calls`, "muted"));
     const last = ev.attempts[ev.attempts.length - 1] || {};
-    card.appendChild(el("p", last.summary || last.error || ""));
+    card.appendChild(el("p", ev.needs_human || last.summary || last.error || ""));
     const tag = `${ev.heal}_${ev.attempts.length - 1}`;
     const imgs = el("div", undefined, "imgs");
-    for (const [kind, caption] of [["before", "What the runner saw"], ["overlay", "SAM 3.1 masks on Muse Spark's picks"]]) {
+    const figures = [["before", "What the runner saw"], ["overlay", "SAM 3.1 masks on Muse Spark's picks"]];
+    for (const [kind, caption] of ev.needs_human ? figures.slice(0, 1) : figures) {
       const fig = el("figure");
       const img = el("img");
       img.src = `/app/runs/${runId}/heals/${tag}_${kind}.png`;
@@ -207,6 +213,11 @@
       feed(`heal failed ${ev.summary}`, "bad");
       addHeal(ev);
     },
+    heal_skipped(ev) { feed(ev.summary, "bad"); },
+    run_stopped(ev) {
+      $("stopped").hidden = false;
+      $("stopped-reason").textContent = ev.reason;
+    },
     row_done(ev) {
       cell(ev.row_idx).className = ev.status === "failed" ? "failed" : ev.heals_used ? "healed" : "ok";
       totals.rows += 1;
@@ -218,7 +229,7 @@
       updateMeter();
     },
     run_done(ev) {
-      $("status").textContent = `done · ${ev.ok}/${ev.rows} rows OK · ${ev.heals} heals · ${ev.duration_s} s`;
+      $("status").textContent = `${ev.stopped ? "stopped, needs a person" : "done"} · ${ev.ok}/${ev.rows} rows OK · ${ev.heals} heals · ${ev.duration_s} s`;
       $("wf").textContent = `${ev.workflow} · ${ev.rows} rows`;
     },
     run_failed(ev) {

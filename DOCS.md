@@ -25,6 +25,7 @@
 | `understand.py` | Muse Spark watches the teach video with the event log and narration and returns a step graph. |
 | `compiler.py` | Muse Wonder turns the recorded skeleton + step graph into a workflow; lint, repair, export script. |
 | `prompts.py` | All prompts, with version tags that are logged with each call. |
+| `bench.py` | The healing benchmark: random portal redesigns, each run from the original workflow, plus the cases that must stop for a person. Writes `data/bench_summary.json`. |
 | `baseline.py` | The comparison: a pure computer-use agent (Muse Spark) doing the same task from screenshots, per row. Writes `data/baseline_summary.json`. |
 
 ## Meta Model API notes
@@ -43,7 +44,7 @@ Verified against the live API:
 
 A deliberately ordinary government-style flow: `/portal/login` → dashboard → `/portal/tax/new` (form) → review → pay → receipt (`DTP-YYYY-NNNNNN`). Demo login `operator` / `demo123` (override with `PORTAL_USER` / `PORTAL_PASSWORD`). State is in memory and resets on restart.
 
-**Drift levels** simulate a site redesign. Set with `POST /portal/admin/drift {"level": N}` or `?drift=N` on any portal URL; the current level shows in a corner badge.
+**Redesigns.** A layout is a set of independent changes. Levels 0-3 are fixed redesigns; level 4 is a **random redesign** drawn from a seed, so the healer meets layouts nobody wrote down in advance. Set with `POST /portal/admin/drift` (`{"level": N}`, `{"level": 4}` for a new random one, `{"seed": 123}` for a specific one) or `?drift=N` (0-3) on any portal URL; the layout key (`v3`, `r123`) shows in a corner badge, and `GET /portal/admin/drift` lists what changed.
 
 | Level | What changes |
 |---|---|
@@ -51,8 +52,11 @@ A deliberately ordinary government-style flow: `/portal/login` → dashboard →
 | 1 | Every `id`, `name` and `class` renamed; form becomes two columns in a different order; submit button moves to the top and becomes "Compute Payable Amount". |
 | 2 | Level 1 + reworded labels; the date input becomes Day/Month/Year selects; the tax-period radios become a select. |
 | 3 | Level 2 + a cookie-consent modal blocking every page until accepted, and a "Session notice" page before review. |
+| 4 (random) | Each of these, drawn at random: ids renamed (always); labels plain, formal or casual; field order; submit button wording and position; date as a date input, day/month/year dropdowns or a DD/MM/YYYY text box; vehicle type and states as native dropdowns, radio cards or **custom dropdowns** (a button that opens a list, as on most modern sites); tax period as radios, dropdown or custom dropdown; the declaration as a checkbox or a **toggle switch**; the mobile number **removed**; an optional email field; the form split into **two pages with a Next button**; a newsletter popup that appears a moment after the form loads; the consent modal; the session notice; reworded navigation (Log in, Continue to payment, Reference number, ...). |
 
-The server reads fields through the same rename map, and each form posts the layout it was rendered with (`_layout`), so a form opened before a mid-run drift switch still submits.
+Two switches simulate what no heal should fix, and the system must stop and say so instead: `{"extra_field": true}` adds a mandatory "Purpose of travel" field the rows have no data for, and `{"blocked": true}` makes every page an "access blocked, unusual automated traffic" page (HTTP 403).
+
+The server reads fields through the same rename map, and each form posts the layout it was rendered with (`_layout`), so a form opened before a mid-run switch still submits.
 
 ## Workflows and the runner
 
@@ -63,7 +67,8 @@ A target carries a **locator chain**, most robust first (role + accessible name,
 `uv run run.py examples/pay-interstate-tax.v1.json data/rows.csv [--start N] [--limit N] [--headed] [--no-heal]`
 
 - Rows run sequentially, one fresh browser context per row (clean cookies, so per-row popups behave like a new visitor). Viewport 1280×800, device scale factor 1, so screenshot pixels equal CSS pixels.
-- A failing step stops the row with a typed failure: `locator_not_found`, `blocked_by_overlay` (the click hit another element, e.g. a modal), `check_failed` or `action_failed`. Steps marked `optional` are skipped on failure.
+- A failing step stops the row with a typed failure: `locator_not_found`, `blocked_by_overlay` (the click hit another element, e.g. a modal), `check_failed` or `action_failed`. Steps marked `optional` (a field the site may have dropped, a Next button that only some layouts have) are skipped after 1.5 s instead of failing.
+- Modern controls need no model: `select` on a custom dropdown clicks it and picks the option by its text; `fill_date` writes the date in the format a text field asks for (its placeholder, e.g. DD/MM/YYYY), or ISO for a date input; `check` works on toggle switches. The value check reads what a custom dropdown shows.
 - Output goes to `data/runs/<run_id>/`: `results.jsonl` (one line per row: status, outputs, duration, model calls, cost), `events.jsonl` (the event stream the dashboard shows), `summary.json`, and `steps/*.png` screenshots (every step of the first row, every failure, every row's last step).
 
 `examples/pay-interstate-tax.v1.json` is hand-written; the teach pipeline generates the same format.
@@ -109,13 +114,17 @@ Measured on a real 100 s recording: Spark ~37 s / $0.06 (26k input tokens), Wond
 When a step fails (`locator_not_found`, `blocked_by_overlay`, or a `check_failed` such as landing on an unexpected page), the runner hands the live page to `heal.py`:
 
 1. **Look.** A full-page screenshot plus a numbered list of the page's interactive elements (role, accessible name, label, placeholder, box), from `describe.js`.
-2. **Triage (Muse Spark, effort medium, one call per page).** Spark gets the screenshot, the element list, the failing step and every later step on the same page whose locators no longer resolve. It answers per step: `moved`, `control_changed` (radios became a dropdown), `split_into_parts` (a date input became day/month/year dropdowns) or `not_found`, with the element's ref and a short *visual* noun phrase. Or it reports an **interruption** (a consent modal, a session-notice page) and the button that clears it.
+2. **Triage (Muse Spark, effort medium, one call per page).** Spark gets the screenshot, the element list, the failing step, every later step on the same page whose locators no longer resolve, and the names of the values the rows have. It answers per step: `moved`, `control_changed` (radios became a dropdown, a checkbox became a switch), `split_into_parts` (a date input became day/month/year dropdowns), `behind_click` (the field is on the next page of a multi-page form), `removed` (the site no longer asks for it) or `not_found`, with the element's ref and a short *visual* noun phrase. Or it reports an **interruption** (a consent modal, a newsletter popup, a session-notice page) and the button that gets it out of the way without signing up for anything. Or it says the run **needs a person** (below).
 3. **Ground (SAM 3.1).** SAM segments every control matching each noun phrase ("white input box", "dropdown menu", "blue button"); one call per unique phrase, in parallel. The detection that lands on Spark's pick is the match: `sam+spark` means both models agree. If SAM has nothing there, Spark's accessibility pick is used (`a11y_pick`).
-4. **Patch.** New locators are prepended (old ones kept as fallbacks), the anchor is updated, controls that changed kind get a new action, split dates get `parts`, interruptions become workflow `interrupts`.
+4. **Patch.** New locators are prepended (old ones kept as fallbacks), the anchor is updated, controls that changed kind get a new action (the old shape is kept as a variant), split dates get `parts`, interruptions become workflow `interrupts`, a removed field's step becomes optional, and a field behind a Next button gets an optional click step before it. The form's pages may not follow the taught order, so the steps of that page are reordered: what is on screen goes first, then the Next click, then the rest. An extract step is re-located by its label without the value it reads (the receipt number changes every row).
 5. **Verify** by running the failing step (or only its check, when the action already happened and the page in between was the interruption).
 6. **Version.** Saved as the next immutable version with a diff in `data/workflows/diffs/`. Every later row uses it, with zero model calls.
 
-Two attempts per heal. Everything is logged per run: `heals.jsonl` (failure, what changed, path, latency, cost) and `heals/<id>_before.png`, `_overlay.png` (SAM masks and labels drawn on the screenshot), `_triage.json`.
+Two attempts per heal. A step that fails to heal twice in a run is not healed again in that run, so a change the healer can't handle costs two heals, not one per row.
+
+**When a person is needed, the run stops.** Some changes must not be "healed": a page that blocks automated access or asks to prove you're human, a sign-in that no longer works, or a new mandatory field the rows have no data for. Spark reports `needs_human` with a reason; the run stops at once (no more rows, no more model calls), the dashboard shows the reason, and `summary.json` has `stopped`. Teach-Once never tries to get around bot detection, and an AI agent is no way around it either: a computer-use agent drives the same kind of browser and gets the same block, at a far higher cost. Detecting it costs one Spark call (~$0.005).
+
+Everything is logged per run: `heals.jsonl` (failure, what changed, path, latency, cost) and `heals/<id>_before.png`, `_overlay.png` (SAM masks and labels drawn on the screenshot), `_triage.json`.
 
 **What we learned about SAM on web UIs.** SAM segments visual concepts, not meanings: "input box" returns all seven text fields on the form, "dropdown menu" all four dropdowns, "checkbox" the checkbox, but "registration number text field" returns nothing, because SAM doesn't read labels. So Spark decides *which* element (meaning), and SAM confirms *where* it is and draws its exact mask (geometry). On the redesigned form both agreed on 8 of 9 elements; the small day/month/year dropdowns were not segmented and came from Spark's pick.
 
@@ -131,13 +140,31 @@ Measured on the demo portal (drift levels from the hand-written v1):
 
 Screenshots are evidence, not the task: headless Chromium occasionally fails to capture a page that is still settling, so the runner retries briefly and otherwise skips that screenshot instead of failing the row.
 
+## Healing benchmark
+
+`uv run bench.py [workflow] [--redesigns 20] [--rows 5] [--seed 100]` (the portal must be running) checks the healer against redesigns nobody wrote down. Each case switches the portal to a random redesign and runs the **original** workflow on a few rows with healing on; healed versions are kept per case (`data/bench/<id>/`), so no case benefits from another's heals. Then the two cases that must stop for a person (a new mandatory field, blocked access). Runs land in `data/runs/` (open them in the dashboard), the summary in `data/bench_summary.json`.
+
+Measured with the hand-written v1, 20 random redesigns (seeds 100-119) × 5 rows:
+
+| | Result |
+|---|---|
+| Redesigns fully recovered | **20/20** (100/100 rows OK) |
+| Heals | 81 (about 4 per redesign: login page, form page, review, payment, receipt, popups) |
+| Cost | $1.09 in total, **$0.055 per redesign**, then $0 per row |
+| Time | 66 s per redesign for the heals and 5 rows |
+| Must-stop cases stopped correctly | **2/2**, one Spark call each ($0.01 together), with reasons like "the form now requires Purpose of travel, which is not among the automation's values" |
+
+What the 20 redesigns contained: ids renamed (20), submit button moved to the top (14) or reworded (17), tax period as a dropdown (13) or custom dropdown (4), **two-page form with a Next button (9)**, field order shuffled (9), consent modal (8), reworded navigation (8), date as a DD/MM/YYYY text box (8) or day/month/year dropdowns (7), vehicle type as radio cards (8) or custom dropdown (6), **mobile number removed (7)**, casual (6) or formal (5) labels, custom state dropdowns (6), session notice (5), declaration as a toggle switch (5), newsletter popup (4), an extra optional field (3).
+
+Seeds 100-104 were used while building this (they found the two-page-form and receipt-label problems); seeds 105-119 were never seen before the run. It is one portal and one task, so it shows the kinds of change the healer handles, not a guarantee for every site.
+
 ## Dashboard
 
 Everything in the demo happens in the browser at `http://localhost:8000/app/`:
 
 1. **Teach** (`/app/teach/new`) and **Compile** (`/app/teach/<rec_id>`), as above. A compiled recording gets a **▶ Run 50 rows** button.
 2. **Run** from the home page: pick any workflow (compiled, healed or a sample), the number of rows and whether to heal. Rows come from `data/rows.csv`, generated with fake data if missing. One run at a time.
-3. **Portal redesign 0-3** in the header switches the demo portal's drift level live (`POST /portal/admin/drift`), also in the middle of a run.
+3. **Portal redesign** in the header changes the demo portal live, also in the middle of a run: levels **0-3**, **🎲 Random** (a new random redesign on every press; hover it to see what changed), **+ required field** and **Block bots** (the two cases that must stop for a person).
 
 The run page (`/app/runs/<run_id>`) follows the run live:
 
@@ -145,6 +172,7 @@ The run page (`/app/runs/<run_id>`) follows the run live:
 - **Row grid:** running, healing (amber), done, healed (done with an amber ring) or failed.
 - **Latest screen:** the last screenshot the runner took (every step of the first row, then each row's last step and every failure).
 - **Events:** row results, failures and heals, newest first.
+- **Stopped banner:** when the run needs a person (blocked access, a new mandatory field), why it stopped.
 - **Heal cards:** what broke, what the healer did, the screenshot it saw and the SAM 3.1 overlay, the time, cost and model calls, and the workflow diff (each patched step's action and first locator before and after, plus new interrupts).
 
 The page reads `GET /app/api/runs/<run_id>/events`, a server-sent event stream that tails the run's `events.jsonl`: each event's id is its line number, so a reconnecting browser resumes where it left off, and opening a finished run replays it. The stream ends with `run_done` (or `run_failed`).

@@ -65,19 +65,27 @@ Complete the whole task on your own. Everything is fake test data and the paymen
 
 When the payment receipt is shown, reply with the receipt number and stop."""
 
-HEAL_VERSION = "heal-v2"
-HEAL = """You repair a browser automation that broke because the website changed. The automation was recorded on the old version of the site; ids, labels, wording, layout and even the kind of control may have changed since.
+HEAL_VERSION = "heal-v3"
+HEAL = """You repair a browser automation that broke because the website changed. The automation was recorded on the old version of the site; ids, labels, wording, layout, the number of form pages and even the kind of control may have changed since.
 
-You get a full-page screenshot of the page as it is now, a numbered list of the interactive elements on it (ref, role, accessible name, label, placeholder, box in screenshot pixels), the step that failed and why, and the steps that should happen on this page.
+You get a full-page screenshot of the page as it is now, a numbered list of the interactive elements on it (ref, role, accessible name, label, placeholder, box in screenshot pixels), the step that failed and why, the steps that should happen on this page, and the names of the values the automation has for each record.
 
-1. `interruption`: is something in the way of the task: a cookie or consent banner, a modal dialog, or an interstitial page (e.g. a "session notice" with a Continue button) that the old site did not have? If so, set present=true, explain it, and give the ref of the button that dismisses it or continues the task (prefer accepting / continuing over cancelling), plus a 2-4 word visual noun phrase for that button ("blue button", "dark button in dialog"). Otherwise present=false and dismiss_ref=-1. If there is an interruption, the page behind it may be hidden: return an empty `steps` list.
+1. `needs_human`: can the task NOT go on without a person? Set present=true with a one-sentence reason when the page blocks automated access or asks to prove you are human (never try to get around that), when signing in no longer works, or when the site now demands information that is not among the automation's values (for example a new mandatory field). Otherwise present=false and reason "". When present, return an empty `steps` list.
 
-2. `steps`: for each listed step, find the element that now does what the step's intent describes. Match by meaning (intent, description, field purpose), not by exact old wording. Return:
-   - `situation`: "moved" (same kind of control, new place/name/id), "control_changed" (e.g. radio buttons became a dropdown), "split_into_parts" (e.g. one date input became separate day/month/year dropdowns) or "not_found".
-   - `ref`: the element's ref (-1 for split_into_parts or not_found).
-   - `new_action`: "same", or the action the new control needs ("select" for a dropdown, "fill", "check", "click").
+2. `interruption`: is something in the way of the task: a cookie or consent banner, a newsletter or promotion popup, a modal dialog, or an interstitial page (e.g. a "session notice" with a Continue button) that the old site did not have? If so, set present=true, explain it, and give the ref of the button that gets it out of the way without signing up for or agreeing to anything extra: "No thanks" or "Close" for promotions, accept for cookie banners, Continue for notices. Add a 2-4 word visual noun phrase for that button ("blue button", "white button in dialog"). Otherwise present=false and dismiss_ref=-1. If there is an interruption, the page behind it may be hidden: return an empty `steps` list.
+
+3. `steps`: for each listed step, find the element that now does what the step's intent describes. Match by meaning (intent, description, field purpose), not by exact old wording. Return:
+   - `situation`:
+     "moved": the same kind of control, with a new place, name or id.
+     "control_changed": a different kind of control does the job now (radio buttons became a dropdown, a dropdown became radio buttons, a checkbox became a switch).
+     "split_into_parts": one date input became separate day/month/year dropdowns.
+     "behind_click": the control is not shown yet because the form now has several steps or a collapsed section; `ref` is the button that reveals it (e.g. "Next"). Use it only for the first such step.
+     "removed": the site no longer asks for this at all.
+     "not_found": anything else.
+   - `ref`: the element's ref (-1 for split_into_parts, removed or not_found).
+   - `new_action`: "same", or the action the new control needs: "select" for any dropdown (a native one, or a button that opens a list of options), "check" for a radio button, checkbox or switch, "fill" for a text box, "click".
    - `parts`: for split_into_parts, one entry per part with `unit` (day, month, year) and its `ref`; otherwise empty.
-   - `noun_phrase`: what the control looks like, for an image segmentation model that sees shapes, not meanings: 2-4 words naming the kind of control and its look, WITHOUT its label text ("white input box", "dropdown menu", "blue button", "checkbox", "radio button"). The model returns every control of that kind; your ref picks which one.
+   - `noun_phrase`: what the control looks like, for an image segmentation model that sees shapes, not meanings: 2-4 words naming the kind of control and its look, WITHOUT its label text ("white input box", "dropdown menu", "blue button", "checkbox", "radio button", "toggle switch"). The model returns every control of that kind; your ref picks which one.
    - `explanation`: one short sentence.
    - `confidence`: 0 to 1.
    Never give two steps the same ref. If uncertain, set confidence low rather than guessing."""

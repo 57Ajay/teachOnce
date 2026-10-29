@@ -99,3 +99,27 @@ def test_live_heal_at_drift_1_then_no_model_calls(base_url, tmp_path, monkeypatc
     results = [json.loads(line) for line in (tmp_path / "runs" / "live_heal" / "results.jsonl").read_text().splitlines()]
     assert summary["ok"] == 3 and summary["heals"] == 1
     assert [r["model_calls"] for r in results[1:]] == [0, 0]
+
+
+def test_a_step_that_fails_to_heal_twice_is_not_healed_again(tmp_path, monkeypatch):
+    attempts = []
+
+    def failing_attempt(*a, **kw):
+        attempts.append(1)
+        raise heal.HealFailed("nothing found")
+
+    healer = heal.Healer(tmp_path, lambda *a, **kw: None)
+    monkeypatch.setattr(healer, "attempt", failing_attempt)
+    failure = run.StepFailed("locator_not_found", "gone")
+    for _ in range(3):
+        assert healer(None, WF, 5, failure, 0) is None
+    assert len(attempts) == heal.MAX_ATTEMPTS * heal.MAX_FAILED_HEALS
+
+
+def test_patch_of_an_extract_step_drops_the_value_it_reads():
+    s = Step(id="s18", intent="Read the receipt number", action="extract", output="receipt_no", pattern=r"DTP-\d{4}-\d{6}",
+             target=Target(locators=[Locator(kind="role", role="row", name="Receipt No.")]))
+    entry = {"situation": "moved", "new_action": "same", "noun_phrase": "table row", "explanation": ""}
+    heal.Healer.patch(s, entry, desc(role="row", accessible_name="Reference number DTP-2026-000127", css="#k1b2c3d"), {})
+    assert [(loc.kind, loc.name or loc.selector) for loc in s.target.locators][:2] == [("role", "Reference number"),
+                                                                                       ("css", "#k1b2c3d")]
