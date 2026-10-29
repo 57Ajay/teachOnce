@@ -15,8 +15,8 @@ import prompts
 import sam
 import workflow
 from recording import stable_css, strip_required
-from run import RowContext, StepFailed, execute, verify
-from workflow import TEMPLATE, Anchor, DatePart, Interrupt, Locator, Step, Target, Workflow
+from run import RowContext, StepFailed, execute, resolves_now, screenshot, shapes, verify
+from workflow import TEMPLATE, Anchor, Check, DatePart, Interrupt, Locator, Step, Target, Variant, Workflow
 
 DESCRIBE_JS = (config.ROOT / "static" / "describe.js").read_text()
 MAX_ATTEMPTS = 2
@@ -69,8 +69,14 @@ def page_window(wf: Workflow, i: int) -> list[Step]:
 
 
 def still_resolves(ctx: RowContext, step: Step) -> bool:
-    targets = [p.target for p in step.parts] or ([step.target] if step.target else [])
-    return bool(targets) and all(locate.resolve(ctx.page, t, ctx.values, 0) for t in targets)
+    return any(resolves_now(ctx, shape) for shape in shapes(step))
+
+
+def remember(step: Step):
+    """Keep the step's current shape as a variant before a heal changes its kind of control."""
+    shape = Variant(**step.model_dump(include={"action", "target", "value", "check", "parts"}))
+    if shape not in step.variants:
+        step.variants.append(shape)
 
 
 def locators_from(desc: dict, variables: dict) -> list[Locator]:
@@ -163,7 +169,9 @@ class Healer:
         page.wait_for_load_state()
         page.add_script_tag(content=DESCRIBE_JS)
         cands = page.evaluate("TeachOnceDescribe.candidates()")
-        shot = page.screenshot(full_page=True)
+        shot = screenshot(page, full_page=True)
+        if shot is None:
+            raise HealFailed("could not take a screenshot")
         (self.dir / f"{tag}_before.png").write_bytes(shot)
 
         window = [s for k, s in enumerate(page_window(wf, i)) if k == 0 or not still_resolves(ctx, s)]
@@ -228,6 +236,7 @@ class Healer:
             if not entry or entry["situation"] == "not_found":
                 continue
             if entry["situation"] == "split_into_parts":
+                remember(step)
                 step.parts, paths = [], set()
                 for part in entry["parts"]:
                     desc, det, path = self.ground(page, shot, cands, part["ref"], entry["noun_phrase"],
@@ -289,15 +298,22 @@ class Healer:
     def patch(step: Step, entry: dict, desc: dict, variables: dict):
         new_locs = locators_from(desc, variables)
         old = step.target
-        if entry["situation"] == "control_changed" and entry["new_action"] != "same":
+        reshaped = entry["situation"] == "control_changed" and entry["new_action"] != "same"
+        if reshaped or step.parts:
+            remember(step)
+        if reshaped:
             templated = next((TEMPLATE.search(loc.name or loc.text or "") for loc in old.locators
                               if TEMPLATE.search(loc.name or loc.text or "")), None) if old else None
             step.action = entry["new_action"]
             step.value = step.value or (templated.group(0) if templated else None)
-            step.check.kind = "value_equals" if step.action in ("select", "fill") else step.check.kind
+            if step.action in ("select", "fill"):
+                step.check = Check(kind="value_equals")
+            elif step.check.kind == "value_equals":
+                step.check = Check()  # a radio or checkbox has no value to compare
             kept = []
         else:
             kept = [loc for loc in (old.locators if old else []) if loc not in new_locs]
+        step.parts = []  # one control again, e.g. a date that was split is a single input once more
         step.target = Target(
             description=old.description if old else entry["explanation"],
             noun_phrase=entry["noun_phrase"] or (old.noun_phrase if old else ""),

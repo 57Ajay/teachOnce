@@ -7,7 +7,7 @@ import heal
 import run
 import workflow
 from conftest import set_drift
-from workflow import Locator, Step, Target
+from workflow import DatePart, Locator, Step, Target
 
 WF = workflow.load(config.ROOT / "examples" / "pay-interstate-tax.v1.json")
 
@@ -58,6 +58,27 @@ def test_patch_control_changed_turns_radio_into_select_with_the_same_variable():
                       {"tax_period": "7 days"})
     assert (s.action, s.value, s.check.kind) == ("select", "{{tax_period}}", "value_equals")
     assert [loc.kind for loc in s.target.locators] == ["role", "label"]  # the radio locators are gone
+    assert [(v.action, v.target.locators[0].role) for v in s.variants] == [("check", "radio")]  # kept as a variant
+
+
+def test_patch_back_to_radio_drops_the_value_check():
+    s = step(action="select", value="{{tax_period}}", locators=[Locator(kind="role", role="combobox", name="Permit Validity")])
+    s.check.kind = "value_equals"
+    entry = {"situation": "control_changed", "new_action": "check", "noun_phrase": "radio button", "explanation": ""}
+    heal.Healer.patch(s, entry, desc(role="radio", accessible_name="7 days", label_text="7 days"), {"tax_period": "7 days"})
+    assert (s.action, s.check.kind) == ("check", "none")
+    assert s.target.locators[0].name == "{{tax_period}}"
+    assert s.variants[0].action == "select" and s.variants[0].check.kind == "value_equals"
+
+
+def test_patch_turns_a_split_date_back_into_one_input():
+    single = Target(locators=[Locator(kind="label", text="Entry date")])
+    day = DatePart(unit="day", target=Target(locators=[Locator(kind="role", role="combobox", name="Day")]))
+    s = Step(id="s11", intent="Enter the entry date", action="fill_date", value="{{entry_date}}", target=single, parts=[day])
+    entry = {"situation": "moved", "new_action": "same", "noun_phrase": "input box", "explanation": ""}
+    heal.Healer.patch(s, entry, desc(role="textbox", accessible_name="Date of entry", label_text="Date of entry"), {})
+    assert s.parts == [] and s.target.locators[0].name == "Date of entry"
+    assert s.variants[0].parts[0].unit == "day"
 
 
 def test_date_parts():

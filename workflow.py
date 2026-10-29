@@ -50,11 +50,23 @@ class Check(BaseModel):
     target: Target | None = None
 
 
+Action = Literal["goto", "click", "fill", "fill_date", "select", "check", "uncheck", "press",
+                 "wait_for", "extract", "assert_text"]
+
+
+class Variant(BaseModel):
+    """A shape the step had before a heal changed its kind of control. Kept because a site can switch back."""
+    action: Action
+    target: Target | None = None
+    value: str | None = None
+    check: Check = Check()
+    parts: list[DatePart] = []
+
+
 class Step(BaseModel):
     id: str
     intent: str
-    action: Literal["goto", "click", "fill", "fill_date", "select", "check", "uncheck", "press",
-                    "wait_for", "extract", "assert_text"]
+    action: Action
     target: Target | None = None
     value: str | None = None
     output: str | None = None
@@ -64,6 +76,7 @@ class Step(BaseModel):
     optional: bool = False
     timeout_ms: int = 5000
     healed: list[dict] = []
+    variants: list[Variant] = []
 
 
 class Variable(BaseModel):

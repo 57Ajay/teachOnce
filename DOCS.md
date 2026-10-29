@@ -127,7 +127,9 @@ Measured on the demo portal (drift levels from the hand-written v1):
 | 2 (+ reworded labels, split date, radios → dropdown) | 1 page heal, 9 steps | ~10 s | ~$0.02 | 0 model calls |
 | 3 (+ consent modal, session-notice page) | 3 (modal, page, notice) | ~25 s | ~$0.035 | 0 model calls, ~1.5 s/row |
 
-Heals only go forward: a patched step keeps its old locators as fallbacks, but a step whose control changed kind is fixed for the new site.
+**Sites switch back.** A patched step keeps its old locators as fallbacks, so a moved or renamed control works on both versions of the site. When a heal changes the *kind* of control (a date input split into day/month/year dropdowns, radios turned into a dropdown), the step's previous shape is kept in `variants`, and the runner uses whichever shape is on the page right now. Switching the portal 0 → 3 → 0 → 2 → 1 → 0 → 3 during one 50-row run: 50/50 rows OK, 3 heals (all at the first switch to level 3), $0.037. The healer can also go the other way on its own: given a step it only knows as day/month/year dropdowns, on a site with one date input again it merges the parts back into one control (one page heal, ~$0.014).
+
+Screenshots are evidence, not the task: headless Chromium occasionally fails to capture a page that is still settling, so the runner retries briefly and otherwise skips that screenshot instead of failing the row.
 
 ## Dashboard
 
