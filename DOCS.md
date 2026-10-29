@@ -128,6 +128,33 @@ Measured on the demo portal (drift levels from the hand-written v1):
 
 Heals only go forward: a patched step keeps its old locators as fallbacks, but a step whose control changed kind is fixed for the new site.
 
+## Computer-use baseline
+
+What Teach-Once is compared with: a pure computer-use agent doing the same task. `uv run baseline.py data/rows.csv [--rows 5] [--levels 0 3] [--effort low] [--headed]` (the portal must be running).
+
+- Muse Spark (reasoning effort low, computer tool) gets the task, the row's values and a screenshot. It answers with actions; `baseline.py` executes them with Playwright at 1280×800 and sends back a new screenshot, until the receipt is shown. Same portal, same CSV rows, a fresh browser per row.
+- A row is OK only if the receipt page shows the row's values. Limits per row: 40 model calls and $0.50. An agent that stops early is told to continue (at most twice).
+- Because the API rejects the 30th request of a computer-use chain, a new chain starts after 25 requests with the task and the current screenshot.
+- Output: `data/baseline/<run_id>/level<N>/` (a JSON transcript per row with every turn's actions, text and usage, a screenshot per turn, `results.jsonl`) and `data/baseline_summary.json`: per drift level, success rate, means per row, and extrapolations to 50 rows and 10,000 rows a day, next to Teach-Once's measured numbers.
+
+Measured (5 rows per level, Spark effort low):
+
+| | Agent, level 0 | Agent, level 3 | Teach-Once |
+|---|---|---|---|
+| Rows OK | 4/5 | 3/5 | 50/50 at every level |
+| Model calls per row | 26.4 | 27.8 | 0 |
+| Input tokens per row | 470k (61% cached) | 499k (60% cached) | 0 |
+| Cost per row | $0.29 | $0.31 | $0 (compile once ~$0.30, ~$0.04 per redesign) |
+| Time per row | 6.2 min | 7.5 min | 1.1 s (level 0), 1.5 s (level 3) |
+| 10,000 rows a day | ~$2,900, 264k calls, ~1,035 h | ~$3,100, 278k calls, ~1,250 h | ~$0.30–0.34 once, 3–4 h |
+
+The agent is not bothered by the redesign itself (it never used ids), but every row costs the same and it is unreliable. From the transcripts:
+
+- **Native dropdowns.** A `<select>`'s option list is drawn by the browser, not the page, so it never appears in a screenshot. The agent clicks a dropdown, sees nothing, and tries letters, arrow keys and Enter; one row spent 20 calls on the two state dropdowns.
+- **Reading pixels.** "Neel Iyer" in a sans-serif font reads as "Neel lyer". The agent spent 14 calls "fixing" a correct name and ran out of calls. Teach-Once's checks read the field's value.
+- **Small targets.** It clicked 25–35 px below the consent modal's button and below the declaration checkbox, then fell back to Tab-navigating whole pages.
+- **Variance.** The same row took 18 calls in one run and failed after 40 in the next.
+
 ## Record/replay cache
 
 `META_CACHE` in `.env`:
