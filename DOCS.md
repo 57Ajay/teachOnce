@@ -25,6 +25,7 @@
 | `understand.py` | Muse Spark watches the teach video with the event log and narration and returns a step graph. |
 | `compiler.py` | Muse Wonder turns the recorded skeleton + step graph into a workflow; lint, repair, export script. |
 | `prompts.py` | All prompts, with version tags that are logged with each call. |
+| `reset.py` | Resets the demo: portal back to level 0, runs deleted, healed workflow versions deleted (compiled versions and recordings kept). |
 | `bench.py` | The healing benchmark: random portal redesigns, each run from the original workflow, plus the cases that must stop for a person. Writes `data/bench_summary.json`. |
 | `baseline.py` | The comparison: a pure computer-use agent (Muse Spark) doing the same task from screenshots, per row. Writes `data/baseline_summary.json`. |
 
