@@ -5,7 +5,7 @@
   <p class="{{ c('lead') }}">Use your operator account to access TransitPass services.</p>
   {% if error %}<div class="{{ c('err-box') }}" role="alert">{{ error }}</div>{% endif %}
   <form method="post" action="/portal/login">
-    <input type="hidden" name="_layout" value="{{ level }}">
+    <input type="hidden" name="_layout" value="{{ L.key }}">
     <div class="{{ c('field') }}">
       <label for="{{ c('username') }}">Username <span class="{{ c('req') }}">*</span></label>
       <input type="text" id="{{ c('username') }}" name="{{ c('username') }}" autocomplete="username">
@@ -14,7 +14,7 @@
       <label for="{{ c('password') }}">Password <span class="{{ c('req') }}">*</span></label>
       <input type="password" id="{{ c('password') }}" name="{{ c('password') }}" autocomplete="current-password">
     </div>
-    <button class="{{ c('btn') }}" id="{{ c('login_btn') }}" type="submit">Sign in</button>
+    <button class="{{ c('btn') }}" id="{{ c('login_btn') }}" type="submit">{{ nav.sign_in }}</button>
   </form>
   <div class="{{ c('hint') }}">Demo login: <strong>{{ demo_user }}</strong> / <strong>{{ demo_password }}</strong></div>
 </div>

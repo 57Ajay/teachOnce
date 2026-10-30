@@ -131,3 +131,19 @@ def test_generated_rows_pass_portal_validation():
     for row in gen_data.generate(200, seed=1):
         data = {**row, "veh_no": row["vehicle_no"], "tax_period": periods[row["tax_period"]], "declaration": True}
         assert portal.validate(data) == {}, row
+
+
+def test_random_layouts_are_reproducible_and_parse_their_own_forms():
+    import portal
+
+    assert portal.layout("r7") == portal.layout("r7") and portal.layout("r7") != portal.layout("r8")
+    assert portal.layout("v3")["consent"] and portal.layout("v0+f")["extra_field"]
+    L = portal.layout("r7") | {"date": "text", "mobile": False}
+    a = lambda key: portal.alias(key, L)
+    form = {a("veh_no"): "nv07ab1234", a("owner_name"): "Asha Verma", a("vehicle_type"): "Bus",
+            a("from_state"): "Northvale", a("to_state"): "Westholm", a("entry_date"): "03/11/2026",
+            a("tax_period"): "7", a("declaration"): "on"}
+    data = portal.read_form(form, L)
+    assert (data["veh_no"], data["entry_date"]) == ("NV07AB1234", "2026-11-03")
+    assert portal.validate(data, L) == {}  # mobile was removed from this layout
+    assert "purpose" in portal.validate(data, L | {"extra_field": True})

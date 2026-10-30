@@ -11,13 +11,13 @@
     <tr><th>Route</th><td>{{ draft.from_state }} → {{ draft.to_state }}</td></tr>
     <tr><th>Entry date</th><td>{{ draft.entry_date }}</td></tr>
     <tr><th>Tax period</th><td>{{ tax_periods[draft.tax_period] }}</td></tr>
-    <tr><th>Mobile number</th><td>{{ draft.mobile }}</td></tr>
+    {% if draft.mobile %}<tr><th>Mobile number</th><td>{{ draft.mobile }}</td></tr>{% endif %}
   </table>
   <p>Tax payable</p>
   <div class="{{ c('amount') }}" id="{{ c('amount') }}">D$ {{ '{:,.2f}'.format(amount) }}</div>
   <div class="{{ c('actions') }}">
     <a class="{{ c('btn') }} {{ c('btn-secondary') }}" id="{{ c('back_btn') }}" href="/portal/tax/new">Back</a>
-    <a class="{{ c('btn') }}" id="{{ c('proceed_btn') }}" href="/portal/tax/pay">Proceed to Pay</a>
+    <a class="{{ c('btn') }}" id="{{ c('proceed_btn') }}" href="/portal/tax/pay">{{ nav.proceed }}</a>
   </div>
 </div>
 {% endblock %}

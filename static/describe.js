@@ -2,7 +2,7 @@
 globalThis.TeachOnceDescribe = (() => {
   const clean = (s) => (s || "").replace(/\s+/g, " ").trim().slice(0, 120);
   const INTERACTIVE = "a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], " +
-    "[role=checkbox], [role=radio], [role=combobox], [role=textbox], [role=tab], [role=menuitem]";
+    "[role=checkbox], [role=radio], [role=switch], [role=combobox], [role=textbox], [role=tab], [role=menuitem]";
 
   function role(el) {
     if (el.getAttribute("role")) return el.getAttribute("role");
@@ -103,9 +103,9 @@ globalThis.TeachOnceDescribe = (() => {
     return d;
   }
 
-  // Interactive elements on the whole page, numbered. Kept for byRef().
-  function candidates() {
-    const els = [...document.querySelectorAll(INTERACTIVE)].filter(visible);
+  // Interactive elements on the whole page (plus `extra`, e.g. table cells to read from), numbered. Kept for byRef().
+  function candidates(extra = "") {
+    const els = [...document.querySelectorAll(INTERACTIVE + (extra ? ", " + extra : ""))].filter(visible);
     globalThis.__teachOnceRefs = els;
     return els.map((el, ref) => ({ ref, ...describeOnPage(el) }));
   }

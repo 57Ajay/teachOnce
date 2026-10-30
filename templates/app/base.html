@@ -37,16 +37,25 @@
     <button data-level="1" title="Renamed ids and classes, new layout, relabelled submit button">1</button>
     <button data-level="2" title="Level 1 + reworded labels, date split into day/month/year, radios become a dropdown">2</button>
     <button data-level="3" title="Level 2 + cookie consent modal and a session-notice page">3</button>
+    <button data-level="4" title="A random mix of changes, new every press">🎲 Random</button>
+    <span style="width:10px"></span>
+    <button data-flag="extra_field" title="The form asks for a new mandatory field the rows have no data for">+ required field</button>
+    <button data-flag="blocked" title="The portal blocks automated traffic">Block bots</button>
   </div>
 </header>
 <main>{% block content %}{% endblock %}</main>
 <script>
-  async function setDrift(level) {
-    const init = level === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level }) };
-    const { level: current } = await (await fetch("/portal/admin/drift", init)).json();
-    document.querySelectorAll(".drift [data-level]").forEach((b) => b.classList.toggle("on", +b.dataset.level === current));
+  async function setDrift(change) {
+    const init = change === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(change) };
+    const d = await (await fetch("/portal/admin/drift", init)).json();
+    document.querySelectorAll(".drift [data-level]").forEach((b) => b.classList.toggle("on", +b.dataset.level === d.level));
+    document.querySelectorAll(".drift [data-flag]").forEach((b) => b.classList.toggle("on", d[b.dataset.flag]));
+    document.querySelector(".drift [data-level='4']").title = d.level === 4
+      ? `Layout ${d.layout}: ${d.changes.join(", ")}. Press again for another one.` : "A random mix of changes, new every press";
   }
-  document.querySelectorAll(".drift [data-level]").forEach((b) => b.addEventListener("click", () => setDrift(+b.dataset.level)));
+  document.querySelectorAll(".drift [data-level]").forEach((b) => b.addEventListener("click", () => setDrift({ level: +b.dataset.level })));
+  document.querySelectorAll(".drift [data-flag]").forEach((b) => b.addEventListener("click", () =>
+    setDrift({ [b.dataset.flag]: !b.classList.contains("on") })));
   setDrift();
 </script>
 </body>

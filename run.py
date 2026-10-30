@@ -23,8 +23,11 @@ import workflow
 from workflow import Interrupt, Step, Workflow
 
 VIEWPORT = {"width": 1280, "height": 800}
-READ_VALUE_JS = "e => e.tagName === 'SELECT' ? (e.options[e.selectedIndex]?.text ?? '') : e.value"
+READ_VALUE_JS = """e => e.tagName === 'SELECT' ? (e.options[e.selectedIndex]?.text ?? '')
+  : ['INPUT', 'TEXTAREA'].includes(e.tagName) ? e.value : e.innerText.trim()"""  # custom dropdowns show their value
 POLL_MS = 150
+OPTIONAL_WAIT_MS = 1500  # an optional step (a field the site may have dropped, a Next button) is skipped quickly
+DATE_PATTERN = re.compile(r"(DD|MM|YYYY)([-/. ])(DD|MM|YYYY)\2(DD|MM|YYYY)")
 
 
 class StepFailed(Exception):
@@ -87,9 +90,9 @@ def resolves_now(ctx: RowContext, step: Step) -> bool:
     return bool(targets) and all(locate.resolve(ctx.page, t, ctx.values, 0) for t in targets)
 
 
-def current_shape(ctx: RowContext, step: Step) -> Step | None:
+def current_shape(ctx: RowContext, step: Step, timeout_ms: int) -> Step | None:
     """The shape of the step whose controls are on the page now, or None if none shows up in time."""
-    deadline = time.monotonic() + step.timeout_ms / 1000
+    deadline = time.monotonic() + timeout_ms / 1000
     while True:
         for shape in shapes(step):
             if resolves_now(ctx, shape):
@@ -102,6 +105,16 @@ def current_shape(ctx: RowContext, step: Step) -> Step | None:
 def date_parts(iso: str) -> dict:
     y, m, d = iso.split("-")
     return {"year": y, "month": m, "day": d}
+
+
+def format_date(iso: str, pattern: str) -> str:
+    """The date in the format a text field asks for (e.g. its placeholder "DD/MM/YYYY"); ISO if none is given."""
+    m = DATE_PATTERN.fullmatch(pattern.strip().upper())
+    if not m:
+        return iso
+    parts = date_parts(iso)
+    units = {"DD": parts["day"], "MM": parts["month"], "YYYY": parts["year"]}
+    return m[2].join(units[m[k]] for k in (1, 3, 4))
 
 
 def verify(ctx: RowContext, step: Step, el, value: str | None):
@@ -139,20 +152,23 @@ def verify(ctx: RowContext, step: Step, el, value: str | None):
 
 def execute(ctx: RowContext, step: Step):
     page, t = ctx.page, step.timeout_ms
+    wait = min(t, OPTIONAL_WAIT_MS) if step.optional else t
     clear_interrupts(ctx)
     if step.variants:
-        step = current_shape(ctx, step)
+        step = current_shape(ctx, step, wait)
         if step is None:
             raise StepFailed("locator_not_found", "no shape of this step matches the page")
     value = workflow.render(step.value, ctx.values) if step.value is not None else None
     el = None
     targets = [p.target for p in step.parts] if step.parts else [step.target] if step.target else []
-    found = [locate.resolve(page, target, ctx.values, t) for target in targets]
+    found = [locate.resolve(page, target, ctx.values, wait) for target in targets]
     if None in found:
         target = targets[found.index(None)]
         raise StepFailed("locator_not_found", f"no locator matched: {target.description or step.intent}")
     if found:
         el = found[0]
+    if step.action == "fill_date" and not step.parts and el.evaluate("e => e.type") != "date":
+        value = format_date(value, el.get_attribute("placeholder") or "")
     try:
         match step.action:
             case "goto":
@@ -164,6 +180,9 @@ def execute(ctx: RowContext, step: Step):
                     part_el.select_option(date_parts(value)[part.unit], timeout=t)
             case "fill" | "fill_date":
                 el.fill(value, timeout=t)
+            case "select" if el.evaluate("e => e.tagName") != "SELECT":  # a button that opens a list
+                el.click(timeout=t)
+                page.get_by_role("option", name=value, exact=True).click(timeout=t)
             case "select":
                 el.select_option(label=value, timeout=t)
             case "check":
@@ -217,6 +236,8 @@ def run_row(browser, wf: Workflow, row_idx: int, row: dict, run_dir: Path, emit,
             healed = healer(ctx, wf, i, e, row_idx) if healer else None
             if healed is None:
                 status, error = "failed", {"step_id": step.id, "kind": e.kind, "message": str(e)}
+                if healer and healer.stop_reason:
+                    error.update(kind="needs_human", message=healer.stop_reason)
                 break
             wf, heals = healed, heals + 1
             ctx.interrupts = wf.interrupts
@@ -279,6 +300,9 @@ def run(workflow_path, csv_path, start_row: int = 0, limit: int | None = None, h
             results.append(result)
             with (run_dir / "results.jsonl").open("a") as f:
                 f.write(json.dumps(result) + "\n")
+            if healer and healer.stop_reason:
+                emit("run_stopped", row=row_idx, reason=healer.stop_reason)
+                break
         browser.close()
 
     summary = {
@@ -291,6 +315,7 @@ def run(workflow_path, csv_path, start_row: int = 0, limit: int | None = None, h
         "model_calls": sum(r["model_calls"] for r in results),
         "cost_usd": round(sum(r["cost_usd"] for r in results), 6),
         "duration_s": round(time.monotonic() - started, 1),
+        "stopped": healer.stop_reason if healer else None,
     }
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     emit("run_done", **summary)

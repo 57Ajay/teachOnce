@@ -4,6 +4,7 @@ The patched workflow is verified by running the step, saved as the next version,
 """
 import base64
 import json
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -20,6 +21,7 @@ from workflow import TEMPLATE, Anchor, Check, DatePart, Interrupt, Locator, Step
 
 DESCRIBE_JS = (config.ROOT / "static" / "describe.js").read_text()
 MAX_ATTEMPTS = 2
+MAX_FAILED_HEALS = 2  # per step and run; after that the step fails fast instead of paying for more heals
 
 _REF = {"type": "integer"}
 _STEP = {
@@ -28,7 +30,8 @@ _STEP = {
     "required": ["step_id", "situation", "ref", "new_action", "parts", "noun_phrase", "explanation", "confidence"],
     "properties": {
         "step_id": {"type": "string"},
-        "situation": {"type": "string", "enum": ["moved", "control_changed", "split_into_parts", "not_found"]},
+        "situation": {"type": "string", "enum": ["moved", "control_changed", "split_into_parts", "behind_click",
+                                                 "removed", "not_found"]},
         "ref": _REF,
         "new_action": {"type": "string", "enum": ["same", "select", "fill", "check", "click"]},
         "parts": {"type": "array", "items": {
@@ -42,8 +45,11 @@ _STEP = {
 SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["interruption", "steps"],
+    "required": ["needs_human", "interruption", "steps"],
     "properties": {
+        "needs_human": {
+            "type": "object", "additionalProperties": False, "required": ["present", "reason"],
+            "properties": {"present": {"type": "boolean"}, "reason": {"type": "string"}}},
         "interruption": {
             "type": "object", "additionalProperties": False,
             "required": ["present", "explanation", "dismiss_ref", "noun_phrase"],
@@ -56,6 +62,10 @@ SCHEMA = {
 
 class HealFailed(Exception):
     pass
+
+
+class NeedsHuman(HealFailed):
+    """The task can't go on without a person: blocked access, human verification, data the rows don't have."""
 
 
 def page_window(wf: Workflow, i: int) -> list[Step]:
@@ -121,11 +131,17 @@ class Healer:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.emit = emit
         self.count = 0
+        self.failures: dict[str, int] = {}
+        self.stop_reason: str | None = None
 
     def __call__(self, ctx: RowContext, wf: Workflow, i: int, failure: StepFailed, row_idx: int) -> Workflow | None:
+        step = wf.steps[i]
+        if self.failures.get(step.id, 0) >= MAX_FAILED_HEALS:
+            self.emit("heal_skipped", row=row_idx, step=step.id,
+                      summary=f"{step.id} could not be healed {MAX_FAILED_HEALS} times in this run; not paying for another try")
+            return None
         self.count += 1
         heal_id = f"h{self.count:02d}"
-        step = wf.steps[i]
         started, usd_before, calls_before = time.monotonic(), cost.spent_usd(), meta_client.stats["calls"]
         self.emit("heal_start", heal=heal_id, row=row_idx, step=step.id, kind=failure.kind,
                   summary=f"{heal_id} row {row_idx} {step.id} {failure.kind}")
@@ -137,6 +153,9 @@ class Healer:
                 new_wf, details = self.attempt(ctx, base, i, failure, f"{heal_id}_{attempt}")
             except (HealFailed, StepFailed, meta_client.MetaAPIError) as e:
                 record["attempts"].append({"error": str(e)[:300]})
+                if isinstance(e, NeedsHuman):
+                    self.stop_reason = record["needs_human"] = str(e)
+                    break
                 if isinstance(e, StepFailed):
                     failure = e
                     base = getattr(e, "partial", base)  # keep a patch whose action worked but whose check didn't
@@ -146,8 +165,10 @@ class Healer:
             path = workflow.save(new_wf)
             self.save_diff(wf, new_wf)
             record.update(to_v=new_wf.version, verified=True, workflow=path.name)
+            self.failures.pop(step.id, None)
             return self.finish(record, started, usd_before, calls_before, new_wf)
         record["verified"] = False
+        self.failures[step.id] = self.failures.get(step.id, 0) + 1
         return self.finish(record, started, usd_before, calls_before, None)
 
     def finish(self, record, started, usd_before, calls_before, new_wf):
@@ -158,7 +179,8 @@ class Healer:
             f.write(json.dumps(record) + "\n")
         last = record["attempts"][-1] if record["attempts"] else {}
         what = last.get("summary") or last.get("error", "")
-        verdict = f"v{record['from_v']} -> v{record['to_v']}" if new_wf else "unrecoverable"
+        verdict = (f"v{record['from_v']} -> v{record['to_v']}" if new_wf else
+                   "needs a person" if record.get("needs_human") else "unrecoverable")
         self.emit("heal_done" if new_wf else "heal_failed", **record,
                   summary=f"{record['heal']} {verdict} in {record['latency_ms'] / 1000:.1f}s, "
                           f"${record['cost_usd']:.3f}: {what}")
@@ -168,19 +190,21 @@ class Healer:
         page = ctx.page
         page.wait_for_load_state()
         page.add_script_tag(content=DESCRIBE_JS)
-        cands = page.evaluate("TeachOnceDescribe.candidates()")
+        window = [s for k, s in enumerate(page_window(wf, i)) if k == 0 or not still_resolves(ctx, s)]
+        reads = any(s.action in ("extract", "assert_text") for s in window)
+        cands = page.evaluate("extra => TeachOnceDescribe.candidates(extra)", "tr, td, dd" if reads else "")
         shot = screenshot(page, full_page=True)
         if shot is None:
             raise HealFailed("could not take a screenshot")
         (self.dir / f"{tag}_before.png").write_bytes(shot)
 
-        window = [s for k, s in enumerate(page_window(wf, i)) if k == 0 or not still_resolves(ctx, s)]
         triage = meta_client.structured(
             meta_client.SPARK,
             [{"role": "user", "content": [
                 {"type": "input_image", "image_url": "data:image/png;base64," + base64.b64encode(shot).decode()},
                 {"type": "input_text", "text": (
-                    f"FAILED STEP: {wf.steps[i].id} ({failure.kind}): {failure}\nCURRENT PAGE: {page.url}\n\n"
+                    f"FAILED STEP: {wf.steps[i].id} ({failure.kind}): {failure}\nCURRENT PAGE: {page.url}\n"
+                    f"VALUES THE AUTOMATION HAS FOR EACH RECORD: {', '.join(v.name for v in wf.variables)}\n\n"
                     f"STEPS ON THIS PAGE:\n{json.dumps([step_brief(s, ctx.values, ctx.hidden) for s in window], indent=1)}"
                     f"\n\nINTERACTIVE ELEMENTS:\n{candidate_lines(cands)}")},
             ]}],
@@ -194,6 +218,8 @@ class Healer:
             timeout=120,
         )
         (self.dir / f"{tag}_triage.json").write_text(json.dumps(triage, indent=2))
+        if triage["needs_human"]["present"]:
+            raise NeedsHuman(triage["needs_human"]["reason"] or "the site needs a person to continue")
         new_wf = wf.model_copy(deep=True)
         variables = {v.name: ctx.values[v.name] for v in wf.variables}
         marks = []
@@ -226,16 +252,32 @@ class Healer:
         by_id = {s["step_id"]: s for s in triage["steps"]}
         if wf.steps[i].id not in by_id or by_id[wf.steps[i].id]["situation"] == "not_found":
             raise HealFailed(f"Spark could not find {wf.steps[i].id}")
-        phrases = sorted({s["noun_phrase"] for s in triage["steps"] if s["situation"] != "not_found"})
+        phrases = sorted({s["noun_phrase"] for s in triage["steps"] if s["situation"] not in ("not_found", "removed")})
         with ThreadPoolExecutor(max_workers=6) as pool:
             detections = dict(zip(phrases, pool.map(lambda p: sam.segment(shot, p, purpose="heal"), phrases)))
 
-        patched, patched_ids = [], set()
+        patched, patched_ids, openers = [], set(), {}
         for step in new_wf.steps:
             entry = by_id.get(step.id)
             if not entry or entry["situation"] == "not_found":
                 continue
-            if entry["situation"] == "split_into_parts":
+            if entry["situation"] == "removed":
+                step.optional = True  # skipped while the field is gone, used again if it comes back
+                path = "removed"
+            elif entry["situation"] == "behind_click":
+                if openers:
+                    continue  # one click reveals the rest
+                desc, det, path = self.ground(page, shot, cands, entry["ref"], entry["noun_phrase"],
+                                              detections.get(entry["noun_phrase"]))
+                if not desc:
+                    continue
+                openers[step.id] = Step(
+                    id=f"{step.id}_open", intent=f"Reveal the next part of the form ({entry['explanation']})",
+                    action="click", optional=True,
+                    target=Target(description=entry["explanation"], noun_phrase=entry["noun_phrase"],
+                                  locators=locators_from(desc, variables), anchor=Anchor(bbox=desc["bbox"])))
+                marks.append(self.mark(desc, det, f"{step.id}: click first ({path})"))
+            elif entry["situation"] == "split_into_parts":
                 remember(step)
                 step.parts, paths = [], set()
                 for part in entry["parts"]:
@@ -262,9 +304,21 @@ class Healer:
         self.write_overlay(tag, shot, marks)
         if wf.steps[i].id not in patched_ids:
             raise HealFailed(f"nothing to patch for {wf.steps[i].id}")
+        for step_id, opener in openers.items():
+            at = next(k for k, s in enumerate(new_wf.steps) if s.id == step_id)
+            new_wf.steps.insert(at, opener)
+            # The form's pages may not follow the taught order: what is on screen now goes first, then the click
+            # that reveals the rest, then the rest.
+            end = i + len(page_window(new_wf, i))
+            block = [s for s in new_wf.steps[i:end] if s is not opener]
+            shown = {s.id for s in block if still_resolves(ctx, s)}
+            new_wf.steps[i:end] = ([s for s in block if s.id in shown] + [opener]
+                                   + [s for s in block if s.id not in shown])
         for step in new_wf.steps:
             for h in step.healed:
                 h["version"] = h["version"] or max(wf.version + 1, workflow.next_version(wf.id))
+        if by_id[wf.steps[i].id]["situation"] == "removed":
+            return new_wf, {"summary": "; ".join(patched), "patched": patched}
         try:
             execute(ctx, new_wf.steps[i])
         except StepFailed as e:
@@ -297,8 +351,15 @@ class Healer:
     @staticmethod
     def patch(step: Step, entry: dict, desc: dict, variables: dict):
         new_locs = locators_from(desc, variables)
+        if step.pattern:  # what an extract step reads changes every row: locate it by its label only
+            unvalued = lambda text: (re.sub(step.pattern, "", text).strip() or None) if text else text
+            for loc in new_locs:
+                loc.name, loc.text = unvalued(loc.name), unvalued(loc.text)
+            new_locs = [loc for loc in new_locs if loc.kind == "css" or loc.name or loc.text]
         old = step.target
         reshaped = entry["situation"] == "control_changed" and entry["new_action"] != "same"
+        if step.action == "fill_date" and entry["new_action"] == "fill":
+            reshaped = False  # still a date: fill_date writes it in the format the field asks for
         if reshaped or step.parts:
             remember(step)
         if reshaped:
@@ -333,8 +394,8 @@ class Healer:
     @staticmethod
     def save_diff(old: Workflow, new: Workflow):
         before = {s.id: s.model_dump(exclude_defaults=True) for s in old.steps}
-        changes = [{"step_id": s.id, "before": before[s.id], "after": s.model_dump(exclude_defaults=True)}
-                   for s in new.steps if s.model_dump(exclude_defaults=True) != before[s.id]]
+        changes = [{"step_id": s.id, "before": before.get(s.id), "after": s.model_dump(exclude_defaults=True)}
+                   for s in new.steps if s.model_dump(exclude_defaults=True) != before.get(s.id)]  # before None: new step
         added = [i.model_dump(exclude_defaults=True) for i in new.interrupts[len(old.interrupts):]]
         diff = {"workflow": old.id, "from": old.version, "to": new.version, "steps": changes, "interrupts_added": added}
         path = workflow.WORKFLOWS_DIR / "diffs" / f"{old.id}.v{old.version}_to_v{new.version}.json"

@@ -1,6 +1,11 @@
-"""Demoland TransitPass Portal: a fictional government-style e-service used as the demo target."""
+"""Demoland TransitPass Portal: a fictional government-style e-service used as the demo target.
+
+A layout is a set of independent changes (traits). Levels 0-3 are fixed redesigns; level 4 is a random mix
+drawn from a seed, so the healer meets redesigns nobody wrote down in advance.
+"""
 import hashlib
 import itertools
+import random
 import re
 import secrets
 from datetime import date
@@ -22,25 +27,77 @@ SERVICE_FEE = 25
 REG_NO = re.compile(r"^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$")
 MOBILE = re.compile(r"^[6-9]\d{9}$")
 
-# key, label (levels 0-1), label (levels 2-3), widget
-FIELDS = [
-    ("veh_no", "Vehicle registration number", "Registration No. of Vehicle", "text"),
-    ("owner_name", "Owner name", "Name of Registered Owner", "text"),
-    ("vehicle_type", "Vehicle type", "Vehicle Category", "select"),
-    ("from_state", "From state", "State of Origin", "select"),
-    ("to_state", "To state", "Destination State", "select"),
-    ("entry_date", "Entry date", "Date of Entry", "date"),
-    ("tax_period", "Tax period", "Permit Validity", "radio"),
-    ("mobile", "Mobile number", "Contact Mobile No.", "text"),
-]
+LABELS = {
+    "plain": {"veh_no": "Vehicle registration number", "owner_name": "Owner name", "vehicle_type": "Vehicle type",
+              "from_state": "From state", "to_state": "To state", "entry_date": "Entry date",
+              "tax_period": "Tax period", "mobile": "Mobile number", "email": "Email (optional)",
+              "purpose": "Purpose of travel"},
+    "formal": {"veh_no": "Registration No. of Vehicle", "owner_name": "Name of Registered Owner",
+               "vehicle_type": "Vehicle Category", "from_state": "State of Origin", "to_state": "Destination State",
+               "entry_date": "Date of Entry", "tax_period": "Permit Validity", "mobile": "Contact Mobile No.",
+               "email": "E-mail Address (optional)", "purpose": "Purpose of Journey"},
+    "casual": {"veh_no": "Vehicle number", "owner_name": "Owner's full name", "vehicle_type": "Type of vehicle",
+               "from_state": "Travelling from", "to_state": "Travelling to", "entry_date": "Date you'll enter",
+               "tax_period": "Pass length", "mobile": "Phone number", "email": "Email for updates (optional)",
+               "purpose": "Why are you travelling?"},
+}
+DECLARATION = {"plain": "I declare that the above details are correct.",
+               "formal": "I hereby certify that the information furnished is true.",
+               "casual": "Yes, these details are correct."}
+NAV = {
+    "plain": {"sign_in": "Sign in", "tile": "Pay Interstate Vehicle Tax", "proceed": "Proceed to Pay",
+              "pay": "Pay Now (Demo)", "receipt_no": "Receipt No.", "notice": "Continue"},
+    "alt": {"sign_in": "Log in", "tile": "Interstate tax payment", "proceed": "Continue to payment",
+            "pay": "Confirm payment (Demo)", "receipt_no": "Reference number", "notice": "I understand"},
+}
+PURPOSES = ["Business", "Tourism", "Goods delivery", "Other"]
 SECTIONS = [
     ("Vehicle details", ["veh_no", "owner_name", "vehicle_type"]),
-    ("Journey details", ["from_state", "to_state", "entry_date", "tax_period"]),
-    ("Contact details", ["mobile"]),
+    ("Journey details", ["from_state", "to_state", "entry_date", "tax_period", "purpose"]),
+    ("Contact details", ["mobile", "email"]),
 ]
+FORM_KEYS = ["veh_no", "owner_name", "vehicle_type", "from_state", "to_state", "entry_date", "tax_period", "mobile"]
 SHUFFLED = ["mobile", "from_state", "veh_no", "tax_period", "owner_name", "to_state", "entry_date", "vehicle_type"]
+SUBMIT_LABELS = ["Calculate Tax", "Compute Payable Amount", "Get amount due", "Calculate payable tax"]
 
-DRIFT = {"level": 0}
+LEVEL0 = dict(rename=False, labels="plain", order=None, submit="Calculate Tax", submit_top=False, date="native",
+              vehicle_type="select", states="select", tax_period="radio", declaration="checkbox", mobile=True,
+              email=False, wizard=False, popup=False, consent=False, notice=False, nav="plain")
+LEVEL1 = LEVEL0 | dict(rename=True, order=SHUFFLED, submit="Compute Payable Amount", submit_top=True)
+LEVEL2 = LEVEL1 | dict(labels="formal", date="dmy", tax_period="select")
+LEVELS = [LEVEL0, LEVEL1, LEVEL2, LEVEL2 | dict(consent=True, notice=True)]
+
+
+def random_traits(seed: int) -> dict:
+    rng = random.Random(seed)
+    chance = lambda p: rng.random() < p
+    return dict(
+        rename=True, labels=rng.choice(list(LABELS)), order=rng.sample(FORM_KEYS, len(FORM_KEYS)) if chance(.6) else None,
+        submit=rng.choice(SUBMIT_LABELS), submit_top=chance(.5), date=rng.choice(["native", "dmy", "text"]),
+        vehicle_type=rng.choice(["select", "radio", "custom"]), states=rng.choice(["select", "custom"]),
+        tax_period=rng.choice(["radio", "select", "custom"]), declaration=rng.choice(["checkbox", "switch"]),
+        mobile=chance(.75), email=chance(.3), wizard=chance(.35), popup=chance(.3), consent=chance(.4),
+        notice=chance(.3), nav=rng.choice(list(NAV)))
+
+
+def layout(key: str) -> dict:
+    """Traits of a layout key: v0-v3 (fixed levels) or r<seed> (random), plus "+f" for the extra required field."""
+    base, _, extra = key.partition("+")
+    traits = LEVELS[int(base[1:])] if base[0] == "v" else random_traits(int(base[1:]))
+    return {**traits, "key": key, "salt": "" if base[0] == "v" else base, "extra_field": extra == "f"}
+
+
+def changes(L: dict) -> list[str]:
+    """What differs from the original site, for people reading the dashboard or benchmark."""
+    out = [f"{k}: {v}" for k, v in L.items() if k in LEVEL0 and k != "order" and v != LEVEL0[k]]
+    if L["order"]:
+        out.append("fields reordered")
+    if L["extra_field"]:
+        out.append("new required field")
+    return out
+
+
+DRIFT = {"level": 0, "seed": None, "extra_field": False, "blocked": False}
 SESSIONS: dict[str, dict] = {}
 RECEIPTS: dict[str, dict] = {}
 _receipt_seq = itertools.count(123)
@@ -50,30 +107,35 @@ templates = Jinja2Templates(directory=config.ROOT / "templates")
 
 def set_drift_from_query(drift: int | None = None):
     if drift is not None:
-        DRIFT["level"] = max(0, min(3, drift))
+        DRIFT.update(level=max(0, min(3, drift)), seed=None)
+
+
+def current() -> dict:
+    base = f"v{DRIFT['level']}" if DRIFT["level"] < 4 else f"r{DRIFT['seed']}"
+    return layout(base + ("+f" if DRIFT["extra_field"] else ""))
 
 
 router = APIRouter(prefix="/portal", dependencies=[Depends(set_drift_from_query)])
 
 
-def alias(name: str, level: int) -> str:
-    """id/name/class used in the HTML. Renamed from drift level 1 on."""
-    return name if level == 0 else "k" + hashlib.sha1(name.encode()).hexdigest()[:6]
+def alias(name: str, L: dict) -> str:
+    """id/name/class used in the HTML. Renamed in redesigned layouts."""
+    return name if not L["rename"] else "k" + hashlib.sha1((L["salt"] + name).encode()).hexdigest()[:6]
 
 
 def session(request: Request) -> dict | None:
     return SESSIONS.get(request.cookies.get("dtp_session", ""))
 
 
-def render(request: Request, name: str, level: int | None = None, **ctx) -> HTMLResponse:
-    level = DRIFT["level"] if level is None else level
+def render(request: Request, name: str, L: dict | None = None, **ctx) -> HTMLResponse:
+    """L is the layout to render; a form re-shown with errors keeps the layout it was submitted with."""
+    L = L or current()
     sess = session(request)
-    ctx.update(
-        level=level,
-        c=lambda n: alias(n, level),
-        user=sess and sess.get("user"),
-        show_consent=DRIFT["level"] == 3 and request.cookies.get("dtp_consent") != "1",
-    )
+    ctx.update(L=L, c=lambda n: alias(n, L), nav=NAV[L["nav"]], user=sess and sess.get("user"),
+               show_consent=current()["consent"] and request.cookies.get("dtp_consent") != "1")
+    if DRIFT["blocked"]:
+        return templates.TemplateResponse(request, "portal/blocked.html", ctx | {"title": "Access blocked", "user": None},
+                                          status_code=403)
     return templates.TemplateResponse(request, f"portal/{name}", ctx)
 
 
@@ -85,18 +147,21 @@ def compute_tax(vehicle_type: str, tax_period: str) -> int:
     return DAILY_RATE[vehicle_type] * PERIOD_FACTOR[tax_period] + SERVICE_FEE
 
 
-def read_form(form, level: int) -> dict:
-    get = lambda key: str(form.get(alias(key, level), "")).strip()
-    data = {key: get(key) for key, *_ in FIELDS}
+def read_form(form, L: dict) -> dict:
+    get = lambda key: str(form.get(alias(key, L), "")).strip()
+    data = {key: get(key) for key in FORM_KEYS + ["purpose"]}
     data["veh_no"] = data["veh_no"].upper().replace(" ", "")
-    if level >= 2:
+    if L["date"] == "dmy":
         d, m, y = get("entry_date_d"), get("entry_date_m"), get("entry_date_y")
         data["entry_date"] = f"{y}-{m}-{d}" if d and m and y else ""
+    elif L["date"] == "text":
+        m = re.fullmatch(r"(\d{2})/(\d{2})/(\d{4})", data["entry_date"])
+        data["entry_date"] = f"{m[3]}-{m[2]}-{m[1]}" if m else ""
     data["declaration"] = get("declaration") == "on"
     return data
 
 
-def validate(data: dict) -> dict:
+def validate(data: dict, L: dict = LEVEL0 | {"extra_field": False}) -> dict:
     errors = {}
     if not REG_NO.match(data["veh_no"]):
         errors["veh_no"] = "Enter a valid registration number, e.g. NV07AB1234."
@@ -113,11 +178,13 @@ def validate(data: dict) -> dict:
     try:
         date.fromisoformat(data["entry_date"])
     except ValueError:
-        errors["entry_date"] = "Enter a valid entry date."
+        errors["entry_date"] = "Enter the date as DD/MM/YYYY." if L["date"] == "text" else "Enter a valid entry date."
     if data["tax_period"] not in TAX_PERIODS:
         errors["tax_period"] = "Select a tax period."
-    if not MOBILE.match(data["mobile"]):
+    if L["mobile"] and not MOBILE.match(data["mobile"]):
         errors["mobile"] = "Enter a 10-digit mobile number."
+    if L["extra_field"] and data.get("purpose") not in PURPOSES:
+        errors["purpose"] = "Select the purpose of travel."
     if not data["declaration"]:
         errors["declaration"] = "You must accept the declaration."
     return errors
@@ -132,8 +199,8 @@ def login_page(request: Request):
 @router.post("/login")
 async def login(request: Request):
     form = await request.form()
-    level = int(form.get("_layout", 0))
-    user, password = form.get(alias("username", level)), form.get(alias("password", level))
+    L = layout(form.get("_layout", "v0"))
+    user, password = form.get(alias("username", L)), form.get(alias("password", L))
     if user != config.PORTAL_USER or password != config.PORTAL_PASSWORD:
         return render(request, "login.html", title="Sign in", error="Invalid username or password.",
                       demo_user=config.PORTAL_USER, demo_password=config.PORTAL_PASSWORD)
@@ -159,16 +226,28 @@ def dashboard(request: Request):
     return render(request, "dashboard.html", title="Dashboard")
 
 
-def form_context(level: int, values: dict, errors: dict) -> dict:
-    labels = {key: (l0 if level < 2 else l2) for key, l0, l2, _ in FIELDS}
-    widgets = {key: w for key, _, _, w in FIELDS}
-    if level >= 1:
-        sections = [("Application details", SHUFFLED)]
+def form_context(L: dict, values: dict, errors: dict) -> dict:
+    present = {"mobile": L["mobile"], "email": L["email"], "purpose": L["extra_field"]}
+    keep = lambda keys: [k for k in keys if present.get(k, True)]
+    if L["order"]:
+        sections = [("Application details", keep(L["order"] + ["purpose", "email"]))]
     else:
-        sections = SECTIONS
-    return dict(title="Pay Interstate Vehicle Tax", labels=labels, widgets=widgets, sections=sections,
-                values=values, errors=errors, states=STATES, vehicle_types=VEHICLE_TYPES,
-                tax_periods=TAX_PERIODS, years=[str(date.today().year), str(date.today().year + 1)])
+        sections = [(title, keep(keys)) for title, keys in SECTIONS if keep(keys)]
+    pages = [sections]
+    if L["wizard"] and not errors:  # two steps with a Next button; a form shown with errors is one page
+        if L["order"]:
+            keys = sections[0][1]
+            pages = [[("Application details", keys[:3])], [("Application details (continued)", keys[3:])]]
+        else:
+            pages = [sections[:1], sections[1:]]
+    widgets = {"entry_date": f"date_{L['date']}", "vehicle_type": L["vehicle_type"], "from_state": L["states"],
+               "to_state": L["states"], "tax_period": L["tax_period"], "purpose": "select"}
+    options = {"vehicle_type": [(v, v) for v in VEHICLE_TYPES], "from_state": [(s, s) for s in STATES],
+               "to_state": [(s, s) for s in STATES], "tax_period": list(TAX_PERIODS.items()),
+               "purpose": [(p, p) for p in PURPOSES]}
+    return dict(title="Pay Interstate Vehicle Tax", labels=LABELS[L["labels"]], declaration=DECLARATION[L["labels"]],
+                widgets=widgets, options=options, pages=pages, values=values, errors=errors,
+                years=[str(date.today().year), str(date.today().year + 1)])
 
 
 @router.get("/tax/new")
@@ -176,8 +255,9 @@ def tax_form(request: Request):
     sess = session(request)
     if not sess:
         return redirect("/portal/login")
-    level = DRIFT["level"]
-    return render(request, "tax_new.html", **form_context(level, sess.get("draft", {}), {}))
+    L = current()
+    return render(request, "tax_new.html", L, **form_context(L, sess.get("draft", {}), {}),
+                  show_popup=L["popup"] and request.cookies.get("dtp_news") != "1")
 
 
 @router.post("/tax/new")
@@ -186,13 +266,13 @@ async def tax_submit(request: Request):
     if not sess:
         return redirect("/portal/login")
     form = await request.form()
-    level = int(form.get("_layout", 0))
-    data = read_form(form, level)
-    errors = validate(data)
+    L = layout(form.get("_layout", "v0"))
+    data = read_form(form, L)
+    errors = validate(data, L)
     if errors:
-        return render(request, "tax_new.html", level=level, **form_context(level, data, errors))
+        return render(request, "tax_new.html", L, **form_context(L, data, errors), show_popup=False)
     sess["draft"] = data
-    return redirect("/portal/tax/notice" if DRIFT["level"] == 3 else "/portal/tax/review")
+    return redirect("/portal/tax/notice" if current()["notice"] else "/portal/tax/review")
 
 
 @router.get("/tax/notice")
@@ -242,15 +322,25 @@ def tax_receipt(request: Request, receipt_no: str):
 
 
 class DriftIn(BaseModel):
-    level: int
+    level: int | None = None  # 0-3 fixed redesigns, 4 = random (a new seed unless one is given)
+    seed: int | None = None
+    extra_field: bool | None = None
+    blocked: bool | None = None
 
 
 @router.get("/admin/drift")
 def get_drift():
-    return DRIFT
+    L = current()
+    return DRIFT | {"layout": L["key"], "changes": changes(L)}
 
 
 @router.post("/admin/drift")
 def post_drift(body: DriftIn):
-    set_drift_from_query(body.level)
-    return DRIFT
+    if body.seed is not None or body.level == 4:
+        DRIFT.update(level=4, seed=body.seed if body.seed is not None else secrets.randbelow(1_000_000))
+    elif body.level is not None:
+        DRIFT.update(level=max(0, min(3, body.level)), seed=None)
+    for flag in ("extra_field", "blocked"):
+        if getattr(body, flag) is not None:
+            DRIFT[flag] = getattr(body, flag)
+    return get_drift()

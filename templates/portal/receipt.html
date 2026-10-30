@@ -5,7 +5,7 @@
   <h1 class="{{ c('success') }}">Payment Successful</h1>
   <p class="{{ c('lead') }}">Keep this receipt for checkpoint inspection.</p>
   <table>
-    <tr><th>Receipt No.</th><td id="{{ c('receipt_no') }}"><strong>{{ r.receipt_no }}</strong></td></tr>
+    <tr><th>{{ nav.receipt_no }}</th><td id="{{ c('receipt_no') }}"><strong>{{ r.receipt_no }}</strong></td></tr>
     <tr><th>Paid on</th><td>{{ r.paid_on }}</td></tr>
     <tr><th>Amount paid</th><td>D$ {{ '{:,.2f}'.format(r.amount) }}</td></tr>
     <tr><th>Vehicle registration number</th><td>{{ r.veh_no }}</td></tr>
