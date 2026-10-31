@@ -28,15 +28,17 @@ globalThis.TeachOnceDescribe = (() => {
     return "";
   }
 
-  function labelText(el) {
+  function linkedLabel(el) {
     const doc = el.ownerDocument;
     if (el.id) {
       const label = doc.querySelector(`label[for="${CSS.escape(el.id)}"]`);
       if (label) return clean(label.innerText);
     }
     const wrap = el.closest("label");
-    return (wrap && clean(wrap.innerText)) || nearLabel(el);
+    return wrap ? clean(wrap.innerText) : "";
   }
+
+  const labelText = (el) => linkedLabel(el) || nearLabel(el);
 
   // Many sites don't link labels to fields: use the label of the smallest group around the field, if the
   // group holds no other field.
@@ -50,6 +52,9 @@ globalThis.TeachOnceDescribe = (() => {
     }
     return "";
   }
+
+  // Custom dropdowns often pick on pointerdown and remove the list before the click, so options are taken from there.
+  const option = (el) => el.closest("[role=option]");
 
   // What a click really meant: the control around the clicked node, or the one field in a small widget
   // (e.g. the arrow icon of a custom dropdown).
@@ -68,7 +73,7 @@ globalThis.TeachOnceDescribe = (() => {
     if (el.getAttribute("aria-label")) return clean(el.getAttribute("aria-label"));
     const by = el.getAttribute("aria-labelledby");
     if (by) return clean(by.split(/\s+/).map((id) => el.ownerDocument.getElementById(id)?.innerText).join(" "));
-    const label = labelText(el);
+    const label = linkedLabel(el);
     if (label) return label;
     const tag = el.tagName.toLowerCase();
     if (["a", "button", "tr", "td", "th"].includes(tag) || /^h[1-6]$/.test(tag) ||
@@ -158,5 +163,5 @@ globalThis.TeachOnceDescribe = (() => {
     return null;
   }
 
-  return { clean, describe, interactive, candidates, byRef, atPoint };
+  return { clean, describe, interactive, option, candidates, byRef, atPoint };
 })();

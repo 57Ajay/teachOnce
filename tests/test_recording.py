@@ -96,3 +96,36 @@ def test_studio_records_a_full_teach_session(base_url, tmp_path, monkeypatch):
     reg = rec["events"][7]["target"]
     assert reg["css"] == "#veh_no" and reg["role"] == "textbox" and reg["bbox"][2] > reg["bbox"][0]
 
+
+def test_live_recorder_saves_a_recording_like_the_studio(base_url, tmp_path, monkeypatch):
+    import teach_live
+
+    monkeypatch.setattr(recording, "REC_DIR", tmp_path)
+    with sync_playwright() as p:
+        session = teach_live.open_session(p, f"{base_url}/portal/logout", headless=True)
+        page = session["page"]
+        page.get_by_label("Username").fill(config.PORTAL_USER)
+        page.get_by_label("Password").fill(config.PORTAL_PASSWORD)
+        page.get_by_role("button", name="Sign in").click()
+        page.get_by_role("link", name="Pay Interstate Vehicle Tax").click()
+        page.get_by_label("Vehicle registration number").fill("NV07AB1234")
+        page.get_by_label("Vehicle type").select_option(label="Bus")
+        page.wait_for_timeout(300)
+        rec_id = teach_live.finish(session, config.ROOT / "data" / "rows.csv")
+
+    rec = recording.load(rec_id)
+    assert rec["meta"]["viewport"] == [1280, 800] and not rec["meta"]["has_narration"]
+    assert rec["meta"]["csv"] == "data/rows.csv" and rec["meta"]["duration_ms"] > 0
+    steps = [(e["action"], e["url"], e.get("value")) for e in rec["events"]]
+    assert steps == [
+        ("navigation", "/portal/login", None),
+        ("fill", "/portal/login", config.PORTAL_USER),
+        ("fill", "/portal/login", "***"),
+        ("click", "/portal/login", None),
+        ("navigation", "/portal/dashboard", None),
+        ("click", "/portal/dashboard", None),
+        ("navigation", "/portal/tax/new", None),
+        ("fill", "/portal/tax/new", "NV07AB1234"),
+        ("select", "/portal/tax/new", "Bus"),
+    ]
+    assert all(a["ts_ms"] <= b["ts_ms"] for a, b in zip(rec["events"], rec["events"][1:]))
