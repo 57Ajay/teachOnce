@@ -118,13 +118,21 @@ def to_workflow(out: dict, rec_id: str) -> Workflow:
     return Workflow.model_validate({**out, "version": 1, "source_recording": rec_id, "steps": steps})
 
 
-def lint(wf: Workflow, events: list[dict], graph: dict, columns: list[str]) -> list[str]:
+def lint(wf: Workflow, events: list[dict], graph: dict, columns: list[str], site: dict) -> list[str]:
     """Deterministic checks of Wonder's output against the recording."""
     problems = []
     sk = skeleton(events)
     actions = [st for st in wf.steps if st.action not in ("goto", "extract")]
     if len(actions) != len(sk):
         problems.append(f"expected {len(sk)} action steps, one per skeleton entry; got {len(actions)}")
+    if wf.start_url != site["start_url"]:
+        problems.append(f"start_url must be {site['start_url']!r}")
+    problems += [f"secret {sec.name!r}: env must be {site['password_env']!r}" for sec in wf.secrets
+                 if sec.env != site["password_env"]]
+    for st, entry in zip(actions, sk):
+        if st.check.kind == "url_contains" and st.check.value and st.check.value in entry["page"]:
+            problems.append(f"{st.id}: url_contains {st.check.value!r} is already true on {entry['page']}; "
+                            f"use a part only {entry['navigated_to']} has")
     for o in graph["outputs"]:
         if not any(st.action == "extract" and st.output == o["name"] for st in wf.steps):
             problems.append(f"missing the extract step for output {o['name']!r}")
@@ -150,11 +158,11 @@ def lint(wf: Workflow, events: list[dict], graph: dict, columns: list[str]) -> l
     return problems
 
 
-def compile_workflow(events: list[dict], graph: dict, columns: list[str], rec_id: str,
+def compile_workflow(events: list[dict], graph: dict, columns: list[str], rec_id: str, site: dict,
                      feedback: str | None = None, previous: dict | None = None) -> tuple[Workflow, dict]:
     """One Wonder call, validated and linted. Problems trigger one repair call that sees the error text."""
-    payload = {"start_page": events[0]["url"], "skeleton": skeleton(events), "step_graph": graph,
-               "csv_columns": columns}
+    payload = {"start_url": site["start_url"], "start_page": events[0]["url"], "password_env": site["password_env"],
+               "skeleton": skeleton(events), "step_graph": graph, "csv_columns": columns}
     text = json.dumps(payload, indent=1)
     if feedback:
         text += f"\n\nYOUR PREVIOUS WORKFLOW:\n{json.dumps(previous)}\n\nIT FAILED:\n{feedback}\nFix it."
@@ -172,11 +180,11 @@ def compile_workflow(events: list[dict], graph: dict, columns: list[str], rec_id
     )
     try:
         wf = to_workflow(out, rec_id)
-        problems = lint(wf, events, graph, columns)
+        problems = lint(wf, events, graph, columns, site)
     except ValidationError as e:
         problems = [str(e)]
     if problems and not feedback:
-        return compile_workflow(events, graph, columns, rec_id, feedback="\n".join(problems), previous=out)
+        return compile_workflow(events, graph, columns, rec_id, site, feedback="\n".join(problems), previous=out)
     if problems:
         raise CompileError("; ".join(problems))
     add_anchors(wf, events)

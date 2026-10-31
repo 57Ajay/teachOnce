@@ -19,6 +19,7 @@
 | `heal.py` | Self-healing: Muse Spark triages what changed, SAM 3.1 grounds the element, the patch is verified and saved as the next version. |
 | `recording.py` | Saves a teach recording, cleans up raw DOM events, converts media with ffmpeg. |
 | `static/recorder.js` + `templates/app/studio.html` | The teach studio: recording toolbar + the portal in a same-origin frame. |
+| `teach_live.py` + `static/live.js` | Teach on any website: a Playwright-launched browser with the recorder injected into every page, screen video and mic narration. Saves the same recording format as the studio. |
 | `static/describe.js` | How an element is described (role, accessible name, label, css, box). Shared by the studio and, injected, by the healer. |
 | `examples/` | Committed sample workflows and the measured `baseline_summary.json`. Generated and healed workflows live in `data/workflows/` (git-ignored). |
 | `teach.py` | The teach pipeline: cleans the recording, then transcribe → understand → compile → dry run → export. |
@@ -69,6 +70,8 @@ A target carries a **locator chain**, most robust first (role + accessible name,
 
 - Rows run sequentially, one fresh browser context per row (clean cookies, so per-row popups behave like a new visitor). Viewport 1280×800, device scale factor 1, so screenshot pixels equal CSS pixels.
 - A failing step stops the row with a typed failure: `locator_not_found`, `blocked_by_overlay` (the click hit another element, e.g. a modal), `check_failed` or `action_failed`. Steps marked `optional` (a field the site may have dropped, a Next button that only some layouts have) are skipped after 1.5 s instead of failing.
+- Labels that aren't linked to their field (common on real sites: `<label>Email</label>` next to an `<input placeholder="Type here">`) still work: a `label` locator first asks Playwright for the linked field, else takes the one field in the smallest group around a label with that text (`locate.near_label_xpath`, the mirror of `nearLabel` in `describe.js`). If that group holds more than one field, it matches nothing rather than guessing.
+- A checkbox or radio inside a `<label>` is ticked by clicking the label, as a person would; many sites cover the real box with their own styling, so clicking the box itself is intercepted.
 - Modern controls need no model: `select` on a custom dropdown clicks it and picks the option by its text; `fill_date` writes the date in the format a text field asks for (its placeholder, e.g. DD/MM/YYYY), or ISO for a date input; `check` works on toggle switches. The value check reads what a custom dropdown shows.
 - Output goes to `data/runs/<run_id>/`: `results.jsonl` (one line per row: status, outputs, duration, model calls, cost), `events.jsonl` (the event stream the dashboard shows), `summary.json`, and `steps/*.png` screenshots (every step of the first row, every failure, every row's last step).
 
@@ -92,18 +95,39 @@ A recording lands in `data/recordings/<rec_id>/`:
 
 `/app/teach/<rec_id>` shows the video, narration and captured events.
 
+Two things the recorder does for real sites, in both the studio and the live recorder:
+
+- **Custom dropdowns**: opening a dropdown and clicking one of its options (`role=option`) becomes one `select` event on the opener, with the option's text as the value. Options are recorded on `pointerdown`, because many dropdowns pick on mousedown and remove the list before a `click` fires.
+- **Near labels**: an element's `label_text` is its linked label (`for=` or a wrapping `<label>`), else the label of the smallest surrounding group that holds no other field. The accessible name stays what the browser computes (e.g. "Type here"), so role locators keep matching.
+
+### Teaching on any website (`teach_live.py`)
+
+The studio can only frame same-origin pages, so for a real site there is a second recorder:
+
+```bash
+uv run teach_live.py https://opensource-demo.orangehrmlive.com/web/index.php/auth/login --csv examples/orangehrm-candidates.csv
+```
+
+- It launches a headed browser (Google Chrome if installed, else Playwright's Chromium) with a 1280×800 viewport, the runner's. `describe.js` and `static/live.js` are added as init scripts, so every page the site loads gets capture-phase listeners; events reach Python through `expose_binding`. Navigations come from Playwright's `framenavigated` (full loads and single-page-app route changes).
+- The screen is Playwright's page video; there is no crop (the video is the page). Narration is recorded with ffmpeg from the default microphone (`-f pulse` on Linux, `-f avfoundation` on macOS); if that fails, the recording continues without narration.
+- Press **Enter** in the terminal (or close the tab) to finish. The focused field is blurred first so its value is recorded. The recording is saved like a studio one, plus `site` and `csv` in `meta.json`, and compiles with the same Compile button.
+- `--csv` names the CSV the task will run on: its columns are what Wonder maps variables to, its first rows are used in the dry run, and the app runs the workflow on it.
+- It needs a display, so it runs on your computer. Playwright's video needs its ffmpeg build: `uv run playwright install chromium` installs it.
+
+Site etiquette: only public demo instances meant to be tried, fake data, a handful of rows. If a site blocks automation or asks for a CAPTCHA, the run stops and says so; nothing here tries to get around that.
+
 ## Teach pipeline (recording → workflow)
 
-`uv run teach.py <rec_id>` (or **Compile workflow** on `/app/teach/<rec_id>`). The portal must be running, because the last stage replays the draft on it. Stages:
+`uv run teach.py <rec_id> [--csv rows.csv]` (or **Compile workflow** on `/app/teach/<rec_id>`). For a portal recording the portal must be running, because the dry run replays the draft on it; a live recording is dry-run on its own site with the CSV it was taught with. Stages:
 
 1. **Final pass** (no model): a click that lands back on the same page was a failed submit (validation error), so it is dropped, and fields re-entered afterwards update the original step. Mistakes made while teaching don't end up in the workflow.
 2. **Transcribe** (Voice Transcribe): narration → timestamped turns, with the field labels as keywords. Keywords over 30 characters are rejected by the API, so they are filtered out. No narration is fine.
 3. **Understand** (Muse Spark, reasoning effort high): the 720p/10 fps video + the event table + the narration → a step graph: intent, per-row variable or constant (with the reason), a visual description and a short SAM noun phrase per target, and the task's outputs. The event log is the ground truth for actions; Spark adds meaning. Cached in `step_graph.json`.
-4. **Compile** (Muse Wonder, effort medium): a deterministic skeleton (one entry per action, with locator candidates built from what the recorder saw) + the step graph + the CSV columns → a workflow under a strict JSON schema. It maps variables to CSV columns, templates values, turns masked passwords into secrets, adds checks and an extract step per output.
+4. **Compile** (Muse Wonder, effort medium): a deterministic skeleton (one entry per action, with locator candidates built from what the recorder saw) + the step graph + the CSV columns → a workflow under a strict JSON schema. It maps variables to CSV columns, templates values, turns masked passwords into secrets, adds checks and an extract step per output. The start URL and the password's env var are given, not chosen: `{{PORTAL_URL}}` + path and `PORTAL_PASSWORD` on the portal; on another site its absolute URL and one variable per site (`https://opensource-demo.orangehrmlive.com` → `ORANGEHRMLIVE_PASSWORD`, set in `.env`; compiling stops early with that name if it's missing).
 Anchors (where each element was during teaching) come from the recording, not from Wonder. Only id-based CSS selectors are kept as locators: a positional path like `div > div > button` can match a different element after a redesign.
 
-5. **Lint** (no model): one step per recorded action, an extract per output, no CSS selector that wasn't recorded, every `{{var}}` declared, every column in the CSV. Problems go back to Wonder for one repair call.
-6. **Dry run**: the draft runs at drift 0 on the recorded example **plus the first CSV rows**, which catches workflows that only fit the example (e.g. a regex that doesn't allow "3,025.00"). A failure goes back to Wonder with the error for one repair call.
+5. **Lint** (no model): one step per recorded action, an extract per output, no CSS selector that wasn't recorded, every `{{var}}` declared, every column in the CSV, the given start URL and password env, and no `url_contains` check that is already true on the page the click leaves (from `/recruitment/addCandidate` to `/recruitment/addCandidate/88`, "addCandidate" would pass before the save finished). Problems go back to Wonder for one repair call.
+6. **Dry run**: the draft runs (on the portal: at drift 0) on the recorded example **plus the first CSV rows**, which catches workflows that only fit the example (e.g. a regex that doesn't allow "3,025.00"). A failure goes back to Wonder with the error for one repair call.
 7. **Export** (Muse Wonder, effort low): a standalone Playwright script (`data/workflows/export_<id>.py`) with the same steps, as the visible "compiled program". It reads secrets from the environment (`PORTAL_PASSWORD=demo123 python data/workflows/export_<id>.py data/rows.csv`).
 
 The workflow is saved as `data/workflows/<id>.v<N>.json`; the recording folder gets the drafts, `examples.csv` and `compiled.json` (cost, time, file names).

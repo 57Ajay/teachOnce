@@ -1,4 +1,5 @@
 import asyncio
+import csv
 import json
 import re
 import threading
@@ -85,6 +86,7 @@ def view_recording(request: Request, rec_id: str):
         "workflow": workflow.load(wf_path) if compiled and (wf_path := workflow.WORKFLOWS_DIR / compiled["workflow"]).exists() else None,
         "export_code": ex_path.read_text() if compiled and (ex_path := workflow.WORKFLOWS_DIR / compiled["export"]).exists() else None,
         "job": JOBS.get(rec_id),
+        "run_rows": min(50, count_rows(teach.rows_csv(rec["meta"]))),
     }
     return templates.TemplateResponse(request, "app/recording.html", ctx)
 
@@ -136,6 +138,35 @@ def workflow_diff(name: str):
     return FileResponse(path, media_type="application/json")
 
 
+def count_rows(path) -> int:
+    if not path.exists():
+        return 50  # the portal's rows are generated on the first run
+    with path.open(newline="") as f:
+        return sum(1 for _ in csv.DictReader(f))
+
+
+def rows_csv_for(workflow_file: str):
+    """The CSV a workflow runs on: the one named when it was taught on a real site, else the portal's fake rows."""
+    rec_id = workflow.load(config.ROOT / workflow_file).source_recording
+    try:
+        meta = recording.load(rec_id)["meta"] if rec_id and REC_ID.fullmatch(rec_id) else {}
+    except FileNotFoundError:
+        meta = {}
+    return teach.rows_csv(meta)
+
+
+def run_on_portal(run_id: str) -> bool:
+    """The measured agent only ever ran on the portal, so other sites get no comparison."""
+    if "portal" in RUNS.get(run_id, {}):
+        return RUNS[run_id]["portal"]
+    path = config.RUNS_DIR / run_id / "events.jsonl"
+    if not path.exists():
+        return True
+    with path.open() as f:
+        first = json.loads(f.readline() or "{}")
+    return teach.on_portal(first.get("start_url", "{{PORTAL_URL}}"))
+
+
 def workflow_choices() -> list[str]:
     """Workflow files that can be run, as paths relative to the repo: newest compiled or healed first, then samples."""
     runtime = sorted(workflow.WORKFLOWS_DIR.glob("*.v*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -184,11 +215,11 @@ def start_run(body: RunIn):
     busy = next((rid for rid, r in RUNS.items() if r["state"] == "running"), None)
     if busy:
         raise HTTPException(409, f"{busy} is still running")
-    rows_csv = config.DATA_DIR / "rows.csv"
-    if not rows_csv.exists():
+    rows_csv = rows_csv_for(body.workflow)
+    if rows_csv == config.DATA_DIR / "rows.csv" and not rows_csv.exists():
         gen_data.write(rows_csv)
     run_id = datetime.now().strftime("run_%Y%m%d_%H%M%S")
-    RUNS[run_id] = {"state": "running"}
+    RUNS[run_id] = {"state": "running", "portal": teach.on_portal(workflow.load(config.ROOT / body.workflow).start_url)}
 
     def work():
         try:
@@ -208,7 +239,9 @@ def start_run(body: RunIn):
 @app.get("/app/runs/{run_id}")
 def view_run(request: Request, run_id: str):
     run_dir_or_404(run_id)
-    return templates.TemplateResponse(request, "app/run.html", {"run_id": run_id, "baseline": baseline_reference()})
+    portal = run_on_portal(run_id)
+    return templates.TemplateResponse(request, "app/run.html", {
+        "run_id": run_id, "portal": portal, "baseline": baseline_reference() if portal else None})
 
 
 @app.get("/app/runs/{run_id}/{kind}/{name}")

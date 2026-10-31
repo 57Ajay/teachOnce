@@ -77,6 +77,7 @@ def wonder_output(**overrides):
 
 GRAPH = {"outputs": [{"name": "receipt_no", "page": "/done", "where": "", "example": ""}]}
 COLUMNS = ["vehicle_no", "mobile"]
+SITE = {"start_url": "{{PORTAL_URL}}/form", "password_env": "PORTAL_PASSWORD"}
 
 
 def test_to_workflow_drops_nulls_and_anchors_come_from_the_recording():
@@ -93,17 +94,33 @@ def test_to_workflow_drops_nulls_and_anchors_come_from_the_recording():
 
 def test_lint_accepts_a_faithful_workflow_and_names_each_problem():
     events = teach.final_pass(RECORDED)
-    assert compiler.lint(compiler.to_workflow(wonder_output(), "r"), events, GRAPH, COLUMNS) == []
+    assert compiler.lint(compiler.to_workflow(wonder_output(), "r"), events, GRAPH, COLUMNS, SITE) == []
 
-    bad = wonder_output()
+    bad = wonder_output(start_url="http://127.0.0.1:8000/form", secrets=[{"name": "password", "env": "PASSWORD"}])
+    bad["steps"][3]["check"] = {"kind": "url_contains", "value": "/form"}
     bad["steps"][1]["target"]["locators"][0]["selector"] = "#invented"
     bad["steps"][2]["value"] = "{{phone}}"
     bad["variables"][0]["column"] = "registration"
     bad["steps"].pop()
-    problems = compiler.lint(compiler.to_workflow(bad, "r"), events, GRAPH, COLUMNS)
+    problems = compiler.lint(compiler.to_workflow(bad, "r"), events, GRAPH, COLUMNS, SITE)
     assert problems == [
+        "start_url must be '{{PORTAL_URL}}/form'",
+        "secret 'password': env must be 'PORTAL_PASSWORD'",
+        "s04: url_contains '/form' is already true on /form; use a part only /done has",
         "missing the extract step for output 'receipt_no'",
         "s02: css selector '#invented' was not recorded",
         "s03: {{phone}} is not a declared variable or secret",
         "variable 'reg': column 'registration' is not in the CSV",
     ]
+
+
+def test_live_recordings_get_their_own_start_url_and_password_env():
+    assert teach.on_portal("/portal/login") and teach.on_portal("{{PORTAL_URL}}/portal/login")
+    assert teach.on_portal("http://127.0.0.1:8000/portal/login")
+    live = "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login"
+    assert not teach.on_portal(live)
+    assert teach.password_env(live) == "ORANGEHRMLIVE_PASSWORD"
+    assert teach.password_env("/portal/login") == "PORTAL_PASSWORD"
+    assert teach.password_env("http://10.0.0.5:8080/login") == "10_0_0_5_PASSWORD"
+    assert teach.workflow_start_url({"start_url": live}, "/web/index.php/auth/login") == live
+    assert teach.workflow_start_url({"start_url": "/portal/login"}, "/portal/login") == "{{PORTAL_URL}}/portal/login"

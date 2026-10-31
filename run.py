@@ -297,7 +297,8 @@ def run(workflow_path, csv_path, start_row: int = 0, limit: int | None = None, h
         healer = healing.Healer(run_dir, emit)
 
     started, start_version = time.monotonic(), wf.version
-    emit("run_start", run_id=run_id, workflow=f"{wf.id}.v{wf.version}", rows=len(rows), start_row=start_row, heal=heal)
+    emit("run_start", run_id=run_id, workflow=f"{wf.id}.v{wf.version}", start_url=wf.start_url, rows=len(rows),
+         start_row=start_row, heal=heal)
     results = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless, executable_path=config.CHROMIUM_PATH)
