@@ -41,6 +41,21 @@ def test_normalize_keeps_one_event_per_intent():
     assert [e["idx"] for e in out] == list(range(7))
 
 
+def test_normalize_turns_a_custom_dropdown_pick_into_a_select():
+    opener = {"tag": "div", "type": "", "role": "", "accessible_name": "", "label_text": "Vacancy", "css": "div > div"}
+    option = {"tag": "div", "type": "", "role": "option", "accessible_name": "Software Engineer"}
+    raw = [
+        {"ts_ms": 100, "type": "click", "target": opener},
+        {"ts_ms": 200, "type": "click", "target": opener},                  # opened and closed again
+        {"ts_ms": 300, "type": "click", "target": opener},
+        {"ts_ms": 400, "type": "click", "target": option},
+        {"ts_ms": 500, "type": "click", "target": {"tag": "button", "type": "submit", "accessible_name": "Save"}},
+    ]
+    out = recording.normalize(raw)
+    assert [(e["action"], e.get("value")) for e in out] == [("select", "Software Engineer"), ("click", None)]
+    assert out[0]["target"]["label_text"] == "Vacancy" and out[0]["ts_ms"] == 300
+
+
 def test_studio_records_a_full_teach_session(base_url, tmp_path, monkeypatch):
     monkeypatch.setattr(recording, "REC_DIR", tmp_path)
     with sync_playwright() as p:
@@ -80,3 +95,4 @@ def test_studio_records_a_full_teach_session(base_url, tmp_path, monkeypatch):
     ]
     reg = rec["events"][7]["target"]
     assert reg["css"] == "#veh_no" and reg["role"] == "textbox" and reg["bbox"][2] > reg["bbox"][0]
+

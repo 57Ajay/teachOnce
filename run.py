@@ -27,6 +27,7 @@ READ_VALUE_JS = """e => e.tagName === 'SELECT' ? (e.options[e.selectedIndex]?.te
   : ['INPUT', 'TEXTAREA'].includes(e.tagName) ? e.value : e.innerText.trim()"""  # custom dropdowns show their value
 POLL_MS = 150
 OPTIONAL_WAIT_MS = 1500  # an optional step (a field the site may have dropped, a Next button) is skipped quickly
+IN_LABEL_JS = "e => ['checkbox', 'radio'].includes(e.type) && !!e.closest('label')"
 DATE_PATTERN = re.compile(r"(DD|MM|YYYY)([-/. ])(DD|MM|YYYY)\2(DD|MM|YYYY)")
 
 
@@ -185,6 +186,11 @@ def execute(ctx: RowContext, step: Step):
                 page.get_by_role("option", name=value, exact=True).click(timeout=t)
             case "select":
                 el.select_option(label=value, timeout=t)
+            case "check" | "uncheck" if el.evaluate(IN_LABEL_JS):  # styled boxes are often covered by their label's art
+                if el.is_checked() != (step.action == "check"):
+                    el.locator("xpath=ancestor::label[1]").click(timeout=t)
+                if el.is_checked() != (step.action == "check"):
+                    raise StepFailed("action_failed", f"clicking its label did not {step.action} it")
             case "check":
                 el.check(timeout=t)
             case "uncheck":

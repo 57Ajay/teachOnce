@@ -100,3 +100,50 @@ def test_modern_controls_need_no_model_calls(rows_csv, base_url, monkeypatch):
     finally:
         set_drift(base_url, 0)
     assert (summary["ok"], summary["model_calls"]) == (1, 0)
+
+
+MODERN_FORM = """
+<style>.box { position: relative } .box input { position: absolute; opacity: 0 } .box span { display: inline-block;
+  width: 16px; height: 16px; border: 1px solid #444; position: relative; z-index: 1 } [role=listbox][hidden] { display: none }</style>
+<div class="group"><div><label>Email</label></div><div><input placeholder="Type here"></div></div>
+<div class="group"><div><label>Contact Number</label></div><div><input placeholder="Type here"></div></div>
+<div class="group"><div><label>Vacancy</label></div><div><div class="select"><div class="text" tabindex="0">-- Select --</div><i>v</i></div>
+  <div role="listbox" hidden><div role="option">Software Engineer</div><div role="option">Senior QA Lead</div></div></div></div>
+<div class="group"><div><label>Consent to keep data</label></div><div><label class="box"><input type="checkbox"><span></span></label></div></div>
+<script>
+  const text = document.querySelector(".text"), list = document.querySelector("[role=listbox]");
+  text.onclick = () => (list.hidden = !list.hidden);
+  list.onclick = (e) => { text.textContent = e.target.textContent; list.hidden = true; };
+</script>
+"""
+
+
+def test_runner_handles_unlinked_labels_custom_dropdowns_and_styled_checkboxes():
+    from playwright.sync_api import sync_playwright
+
+    import locate
+    from workflow import Locator, Step, Target
+
+    def step(action, label, value=None, check="none"):
+        return Step(id="s", intent="", action=action, value=value, check={"kind": check},
+                    target=Target(locators=[Locator(kind="label", text=label)]))
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(executable_path=config.CHROMIUM_PATH)
+        page = browser.new_page()
+        page.set_content(MODERN_FORM)
+        page.add_script_tag(path=config.ROOT / "static" / "describe.js")
+        labels = page.evaluate("""() => [...document.querySelectorAll("input, .text")].map(
+            (el) => TeachOnceDescribe.describe(el).label_text)""")
+        assert labels == ["Email", "Contact Number", "Vacancy", "Consent to keep data"]
+        assert page.evaluate("TeachOnceDescribe.describe(TeachOnceDescribe.interactive(document.querySelector('i'))).label_text") == "Vacancy"
+
+        ctx = run.RowContext(page, {}, set(), [])
+        run.execute(ctx, step("fill", "Contact Number", "555-0100", "value_equals"))
+        run.execute(ctx, step("select", "Vacancy", "Senior QA Lead", "value_equals"))
+        run.execute(ctx, step("check", "Consent to keep data"))
+        assert page.locator("input").nth(1).input_value() == "555-0100"
+        assert page.locator(".text").inner_text() == "Senior QA Lead"
+        assert page.locator("input[type=checkbox]").is_checked()
+        assert locate.by_label(page, "Email").count() == 1
+        browser.close()

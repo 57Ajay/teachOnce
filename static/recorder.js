@@ -11,7 +11,7 @@
   let typingSince = new WeakMap(); // field -> when typing started, so a fill is timed at its start
 
   const now = () => Math.round(performance.now() - t0);
-  const { describe } = window.TeachOnceDescribe;
+  const { describe, interactive } = window.TeachOnceDescribe;
   const status = (s) => (statusEl.textContent = s);
   const once = (el, name) => new Promise((res) => el.addEventListener(name, res, { once: true }));
 
@@ -42,7 +42,6 @@
     if (!doc || doc.__teachOnce) return;
     doc.__teachOnce = true;
     record("navigation", null);
-    const interactive = (el) => el.closest("a, button, input, select, textarea, label, [role]") || el;
     doc.addEventListener("click", (e) => record("click", interactive(e.target)), true);
     doc.addEventListener("change", (e) => record("change", e.target, { value: valueOf(e.target), checked: !!e.target.checked }), true);
     doc.addEventListener("input", (e) => typingSince.has(e.target) || typingSince.set(e.target, now()), true);

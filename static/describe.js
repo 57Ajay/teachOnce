@@ -3,6 +3,11 @@ globalThis.TeachOnceDescribe = (() => {
   const clean = (s) => (s || "").replace(/\s+/g, " ").trim().slice(0, 120);
   const INTERACTIVE = "a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], " +
     "[role=checkbox], [role=radio], [role=switch], [role=combobox], [role=textbox], [role=tab], [role=menuitem]";
+  // Controls that take a value. Same set as locate.py's FIELD_XPATH (a near label must point back to one field).
+  const FIELD = "input:not([type=hidden], [type=submit], [type=button], [type=reset], [type=image]), select, textarea, " +
+    "[role=combobox], [role=textbox], [role=switch], [role=checkbox], [role=radio], [contenteditable=true], " +
+    "[tabindex='0']:not(a, button)";
+  const NAMED_BY_TEXT = ["button", "link", "option", "menuitem", "tab", "row", "cell"];
 
   function role(el) {
     if (el.getAttribute("role")) return el.getAttribute("role");
@@ -30,7 +35,33 @@ globalThis.TeachOnceDescribe = (() => {
       if (label) return clean(label.innerText);
     }
     const wrap = el.closest("label");
-    return wrap ? clean(wrap.innerText) : "";
+    return (wrap && clean(wrap.innerText)) || nearLabel(el);
+  }
+
+  // Many sites don't link labels to fields: use the label of the smallest group around the field, if the
+  // group holds no other field.
+  function nearLabel(el) {
+    if (!el.matches(FIELD)) return "";
+    let node = el.parentElement;
+    for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
+      if (node.querySelectorAll(FIELD).length > 1) return "";
+      const label = [...node.querySelectorAll("label")].find((l) => clean(l.innerText));
+      if (label) return clean(label.innerText);
+    }
+    return "";
+  }
+
+  // What a click really meant: the control around the clicked node, or the one field in a small widget
+  // (e.g. the arrow icon of a custom dropdown).
+  function interactive(el) {
+    const hit = el.closest("a, button, input, select, textarea, label, [role], [tabindex]");
+    if (hit) return hit;
+    let node = el.parentElement;
+    for (let depth = 0; node && depth < 3; depth++, node = node.parentElement) {
+      const fields = node.querySelectorAll(FIELD);
+      if (fields.length) return fields.length === 1 ? fields[0] : el;
+    }
+    return el;
   }
 
   function accessibleName(el) {
@@ -40,7 +71,8 @@ globalThis.TeachOnceDescribe = (() => {
     const label = labelText(el);
     if (label) return label;
     const tag = el.tagName.toLowerCase();
-    if (["a", "button", "tr", "td", "th"].includes(tag) || /^h[1-6]$/.test(tag)) return clean(el.innerText);
+    if (["a", "button", "tr", "td", "th"].includes(tag) || /^h[1-6]$/.test(tag) ||
+        NAMED_BY_TEXT.includes(el.getAttribute("role"))) return clean(el.innerText);
     if (tag === "input" && ["submit", "button"].includes(el.type)) return clean(el.value);
     return clean(el.getAttribute("placeholder") || el.getAttribute("title"));
   }
@@ -126,5 +158,5 @@ globalThis.TeachOnceDescribe = (() => {
     return null;
   }
 
-  return { clean, describe, candidates, byRef, atPoint };
+  return { clean, describe, interactive, candidates, byRef, atPoint };
 })();
