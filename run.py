@@ -72,6 +72,12 @@ def clear_interrupts(ctx: RowContext) -> bool:
 
 def screenshot(page: Page, **kw) -> bytes | None:
     """Headless Chromium sometimes can't capture a page that is still settling; retry briefly, then give up."""
+    try:
+        if not page.evaluate("document.body?.innerText.trim()"):  # a client-rendered page that is still loading
+            page.wait_for_function("document.body?.innerText.trim()", timeout=3000)
+            page.wait_for_load_state("networkidle", timeout=3000)
+    except PlaywrightError:
+        pass
     for _ in range(3):
         try:
             page.wait_for_load_state()
