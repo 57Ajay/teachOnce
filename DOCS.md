@@ -114,6 +114,10 @@ uv run teach_live.py https://opensource-demo.orangehrmlive.com/web/index.php/aut
 - `--csv` names the CSV the task will run on: its columns are what Wonder maps variables to, its first rows are used in the dry run, and the app runs the workflow on it.
 - It needs a display, so it runs on your computer. Playwright's video needs its ffmpeg build: `uv run playwright install chromium` installs it.
 
+Measured on OrangeHRM's public demo (Recruitment → Add candidate: names, a custom vacancy dropdown, email and contact number with unlinked labels, a styled consent checkbox, Save). The recording was made in the headless sandbox by a script driving `teach_live.py`'s browser, without narration (19 s, 13 actions). Compile: 92 s, $0.21, no repair; Spark found the five per-row values; the Save check waits for `/recruitment/addCandidate/` (the profile page), not the form's own path. Runs: 5/5 rows from the CLI and 1/1 from the app, 0 model calls, ~10 s per row (each row signs in on the shared demo). The candidates were checked in the site's candidate list.
+
+Screenshots wait for client-rendered pages: if the page has no text yet, the runner waits (up to 3 s each) for text and for the network to go quiet. Server-rendered pages like the portal pay nothing.
+
 Site etiquette: only public demo instances meant to be tried, fake data, a handful of rows. If a site blocks automation or asks for a CAPTCHA, the run stops and says so; nothing here tries to get around that.
 
 ## Teach pipeline (recording → workflow)
