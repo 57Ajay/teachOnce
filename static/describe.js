@@ -22,7 +22,8 @@ globalThis.TeachOnceDescribe = (() => {
     if (tag === "input") {
       if (["checkbox", "radio"].includes(type)) return type;
       if (["submit", "button", "reset", "image"].includes(type)) return "button";
-      if (["text", "email", "tel", "search", "url"].includes(type)) return "textbox";
+      if (["text", "email", "tel", "url"].includes(type)) return "textbox";
+      if (type === "search") return "searchbox";
       if (type === "number") return "spinbutton";
     }
     return "";
@@ -69,6 +70,14 @@ globalThis.TeachOnceDescribe = (() => {
     return el;
   }
 
+  // Like the browser: text inside aria-hidden parts (icons, avatar initials) is not part of the name.
+  function nameFromText(el) {
+    if (!el.querySelector("[aria-hidden=true]")) return clean(el.innerText);
+    const copy = el.cloneNode(true);
+    copy.querySelectorAll("[aria-hidden=true]").forEach((n) => n.remove());
+    return clean(copy.textContent);
+  }
+
   function accessibleName(el) {
     if (el.getAttribute("aria-label")) return clean(el.getAttribute("aria-label"));
     const by = el.getAttribute("aria-labelledby");
@@ -77,7 +86,7 @@ globalThis.TeachOnceDescribe = (() => {
     if (label) return label;
     const tag = el.tagName.toLowerCase();
     if (["a", "button", "tr", "td", "th"].includes(tag) || /^h[1-6]$/.test(tag) ||
-        NAMED_BY_TEXT.includes(el.getAttribute("role"))) return clean(el.innerText);
+        NAMED_BY_TEXT.includes(el.getAttribute("role"))) return nameFromText(el);
     if (tag === "input" && ["submit", "button"].includes(el.type)) return clean(el.value);
     return clean(el.getAttribute("placeholder") || el.getAttribute("title"));
   }

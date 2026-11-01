@@ -1,0 +1,9 @@
+email,interview_type,date,time,duration,interviewer
+asha.verma@example.com,Video call,2026-11-10,10:00,45 min,Priya Raman
+meera.nair@example.com,On-site,2026-11-11,14:30,60 min,Daniel Okafor
+nisha.menon@example.com,Phone screen,2026-11-12,09:30,30 min,Mei Chen
+arjun.joshi@example.com,Video call,2026-11-13,11:00,60 min,Lucas Ferreira
+imran.dutta@example.com,On-site,2026-11-16,15:00,45 min,Grace Mensah
+tomas.ruiz@example.com,Phone screen,2026-11-17,13:30,30 min,Priya Raman
+elif.kaya@example.com,Video call,2026-11-18,16:00,45 min,Mei Chen
+amara.okafor@example.com,On-site,2026-11-19,10:30,60 min,Daniel Okafor

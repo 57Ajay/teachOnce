@@ -121,6 +121,7 @@ def test_live_recordings_get_their_own_start_url_and_password_env():
     assert not teach.on_portal(live)
     assert teach.password_env(live) == "ORANGEHRMLIVE_PASSWORD"
     assert teach.password_env("/portal/login") == "PORTAL_PASSWORD"
-    assert teach.password_env("http://10.0.0.5:8080/login") == "10_0_0_5_PASSWORD"
+    assert teach.password_env("http://10.0.0.5:8080/login") == "10_0_0_5_8080_PASSWORD"
+    assert teach.password_env("http://localhost:3000/login") == "LOCALHOST_3000_PASSWORD"
     assert teach.workflow_start_url({"start_url": live}, "/web/index.php/auth/login") == live
     assert teach.workflow_start_url({"start_url": "/portal/login"}, "/portal/login") == "{{PORTAL_URL}}/portal/login"
