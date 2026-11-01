@@ -20,7 +20,7 @@ In `outputs`, list values the task produces that should be saved for each row (f
 
 If uncertain, set confidence low rather than guessing."""
 
-COMPILE_VERSION = "compile-v4"
+COMPILE_VERSION = "compile-v5"
 COMPILE = """You are the compiler of Teach-Once. You turn one recorded demonstration of a web task into a deterministic, parameterized workflow that a replay engine runs for every row of a CSV file with no AI in the loop.
 
 You get JSON with:
@@ -36,6 +36,7 @@ Produce the workflow:
 - `action`: the skeleton action (fill, fill_date, select, check, uncheck, click, press).
 - `value`: for variables "{{variable_name}}". For constants the recorded value. A masked "***" value is a password: use "{{password}}" and add the secret {"name": "password", "env": <password_env>}. For check, uncheck and click: null.
 - Radio buttons and options picked per row: put the template in the locator instead (role "radio" with name "{{variable_name}}", and a label locator with text "{{variable_name}}"), value null.
+- Search results: a skeleton entry with `picks_result_of` clicks a result whose visible name contains what was typed in that earlier entry (typed "ines", clicked "Ines Duarte"). That typed value is a variable: map it to the CSV column holding the name the result shows (e.g. a full name), not to another identifier. Its role locator name will be set to the same template automatically.
 - `target.locators`: start from the skeleton candidates, keep their order (role, label, placeholder, text, css). Copy css selectors exactly; never invent selectors. Shorten a link or button name to its visible title when the recorded name also contains a description. Drop a placeholder or text locator that contains the recorded value of a variable.
 - `target.description` and `target.noun_phrase`: from the step graph.
 - `check`: a password field: none (never read a secret back). a click that navigated: url_contains with the stable part of the next page path (no ids or numbers that change per run) that is not already part of the current page's path (from "/items/add" to "/items/add/83": "/items/add/"). fill, fill_date and select: value_equals with value null. check, uncheck: none.

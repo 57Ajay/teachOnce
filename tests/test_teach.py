@@ -125,3 +125,24 @@ def test_live_recordings_get_their_own_start_url_and_password_env():
     assert teach.password_env("http://localhost:3000/login") == "LOCALHOST_3000_PASSWORD"
     assert teach.workflow_start_url({"start_url": live}, "/web/index.php/auth/login") == live
     assert teach.workflow_start_url({"start_url": "/portal/login"}, "/portal/login") == "{{PORTAL_URL}}/portal/login"
+
+
+def test_a_click_on_the_searched_result_follows_the_search_variable():
+    search = dict(change(1000, "", "Search", "ravi", url="/candidates"), target={
+        "tag": "input", "type": "search", "role": "searchbox", "accessible_name": "Search candidates",
+        "label_text": "", "placeholder": "Search", "css": "div > input", "bbox": [0, 0, 10, 10]})
+    result = dict(click(2000, "Ravi Kapoor", url="/candidates"),
+                  target={"tag": "a", "type": "", "role": "link", "accessible_name": "Ravi Kapoor", "label_text": "",
+                          "placeholder": "", "css": "td > a", "bbox": [0, 20, 10, 30]})
+    events = teach.final_pass([nav(0, "/candidates"), search, result, nav(2100, "/profile/2")])
+    assert compiler.skeleton(events)[1]["picks_result_of"] == 1
+    wf = Workflow.model_validate({"id": "x", "version": 1, "name": "x", "start_url": "/", "steps": [
+        {"id": "s01", "intent": "", "action": "goto", "value": "/"},
+        {"id": "s02", "intent": "", "action": "fill", "value": "{{name}}",
+         "target": {"locators": [{"kind": "placeholder", "text": "Search"}]}},
+        {"id": "s03", "intent": "", "action": "click", "target": {"locators": [
+            {"kind": "role", "role": "link", "name": "Ravi Kapoor"}, {"kind": "text", "text": "Ravi Kapoor"}]}},
+    ]})
+    compiler.template_picks(wf, events)
+    assert [loc.model_dump(exclude_none=True) for loc in wf.steps[2].target.locators] == [
+        {"kind": "role", "role": "link", "name": "{{name}}"}]

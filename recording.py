@@ -18,8 +18,9 @@ def strip_required(name: str) -> str:
 
 
 def stable_css(css: str) -> bool:
-    """Only id selectors survive as locators; a positional path can match a different element after a redesign."""
-    return bool(re.fullmatch(r"#[\w-]+", css or ""))
+    """Only id selectors survive as locators; a positional path can match a different element after a redesign.
+    So can an id React generates from render order (useId: "_r_1_", older ":r1:")."""
+    return bool(re.fullmatch(r"#[\w-]+", css or "")) and not re.fullmatch(r"#_r_\w+_", css)
 
 
 def is_field(target: dict) -> bool:

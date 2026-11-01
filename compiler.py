@@ -74,12 +74,16 @@ SCHEMA = {
 
 def skeleton(events: list[dict]) -> list[dict]:
     """One entry per recorded action with locator candidates built from what the recorder saw."""
-    out = []
+    out, typed = [], []  # typed: (event_idx, page, text) of every fill so far
     for i, e in enumerate(events):
         if e["type"] == "navigation":
             continue
         t = e["target"]
         name = strip_required(t.get("accessible_name"))
+        if e["action"] == "fill" and len(e.get("value") or "") >= 3:
+            typed.append((e["idx"], e["url"], e["value"]))
+        picks = next((idx for idx, page, text in reversed(typed) if e["action"] == "click" and page == e["url"]
+                      and text.lower() in name.lower()), None)
         locators = []
         if t.get("role") and name:
             locators.append({"kind": "role", "role": t["role"], "name": name})
@@ -99,8 +103,26 @@ def skeleton(events: list[dict]) -> list[dict]:
             "element": f"{t.get('tag')}[type={t.get('type')}]" if t.get("type") else t.get("tag"),
             "locators": locators,
             "bbox": t.get("bbox"),
+            "picks_result_of": picks,
         })
     return out
+
+
+def template_picks(wf: Workflow, events: list[dict]):
+    """A click on a search result named after what was typed (search "ravi", click "Ravi Kapoor") picks a different
+    result on every row: its role locator takes the typed step's template, other locators (the recorded name) go."""
+    actions = [st for st in wf.steps if st.action not in ("goto", "extract")]
+    pairs = list(zip(actions, skeleton(events)))
+    by_event = {entry["event_idx"]: st for st, entry in pairs}
+    for st, entry in pairs:
+        source = by_event.get(entry["picks_result_of"])
+        if not (source and source.value and TEMPLATE.fullmatch(source.value.strip()) and st.target):
+            continue
+        roles = [loc for loc in st.target.locators if loc.kind == "role"]
+        for loc in roles:
+            loc.name = source.value.strip()
+        if roles:
+            st.target.locators = roles
 
 
 def to_workflow(out: dict, rec_id: str) -> Workflow:
@@ -180,6 +202,7 @@ def compile_workflow(events: list[dict], graph: dict, columns: list[str], rec_id
     )
     try:
         wf = to_workflow(out, rec_id)
+        template_picks(wf, events)
         problems = lint(wf, events, graph, columns, site)
     except ValidationError as e:
         problems = [str(e)]
