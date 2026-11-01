@@ -19,6 +19,8 @@ def test_task_csvs_fit_the_test_sites_seed_data():
     assert {r["job"] for r in add} <= set(seed["jobs"])
     assert {r["email"] for r in remove} <= emails and {r["email"] for r in schedule} <= emails
     assert not {r["email"] for r in remove} & {r["email"] for r in schedule}  # both run after one reset
+    names = {c["email"]: f'{c["firstName"]} {c["lastName"]}' for c in seed["candidates"]}
+    assert all(names[r["email"]] == r["name"] for r in remove + schedule)  # searching by name finds the same person
     schedule_page = (SITE / "src" / "schedule.tsx").read_text()
     for r in schedule:
         assert r["interviewer"] in seed["interviewers"]

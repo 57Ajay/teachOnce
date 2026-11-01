@@ -1,7 +1,7 @@
-email
-ravi.kapoor@example.com
-kabir.sethi@example.com
-leela.pillai@example.com
-sofia.marin@example.com
-hana.sato@example.com
-noah.fischer@example.com
+name,email
+Ravi Kapoor,ravi.kapoor@example.com
+Kabir Sethi,kabir.sethi@example.com
+Leela Pillai,leela.pillai@example.com
+Sofia Marin,sofia.marin@example.com
+Hana Sato,hana.sato@example.com
+Noah Fischer,noah.fischer@example.com
