@@ -189,7 +189,11 @@ def execute(ctx: RowContext, step: Step):
                 el.fill(value, timeout=t)
             case "select" if el.evaluate("e => e.tagName") != "SELECT":  # a button that opens a list
                 el.click(timeout=t)
-                page.get_by_role("option", name=value, exact=True).click(timeout=t)
+                try:
+                    page.get_by_role("option", name=value, exact=True).click(timeout=t)
+                except PlaywrightError as e:
+                    offered = [o.strip() for o in page.get_by_role("option").all_inner_texts()][:12]
+                    raise StepFailed("action_failed", f"the list has no option {value!r} (it offers: {offered})") from e
             case "select":
                 el.select_option(label=value, timeout=t)
             case "check" | "uncheck" if el.evaluate(IN_LABEL_JS):  # styled boxes are often covered by their label's art

@@ -146,4 +146,7 @@ def test_runner_handles_unlinked_labels_custom_dropdowns_and_styled_checkboxes()
         assert page.locator(".text").inner_text() == "Senior QA Lead"
         assert page.locator("input[type=checkbox]").is_checked()
         assert locate.by_label(page, "Email").count() == 1
+        with pytest.raises(run.StepFailed, match=r"no option 'Software Engineer' \(it offers: \['Software Engineer \(old\)'"):
+            page.evaluate("document.querySelector('[role=option]').textContent = 'Software Engineer (old)'")
+            run.execute(ctx, step("select", "Vacancy", "Software Engineer"))
         browser.close()

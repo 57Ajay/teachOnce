@@ -82,7 +82,7 @@
       <td>{{ e.idx }}</td>
       <td class="mono">{{ '%.1f' % (e.ts_ms / 1000) }}s</td>
       <td><span class="chip">{{ e.action }}</span></td>
-      <td>{% if e.target %}{{ e.target.role or e.target.tag }} <strong>{{ e.target.accessible_name }}</strong><br><code>{{ e.target.css }}</code>{% endif %}</td>
+      <td>{% if e.target %}{{ e.target.role or e.target.tag }} <strong>{{ e.target.label_text or e.target.accessible_name }}</strong><br><code>{{ e.target.css }}</code>{% endif %}</td>
       <td class="mono">{{ e.value if e.value is defined else '' }}</td>
       <td class="mono">{{ e.url }}</td>
     </tr>

@@ -5,6 +5,8 @@ Usage: uv run teach_live.py <url> [--csv examples/orangehrm-candidates.csv] [--n
 Needs a display (and a microphone for narration), so it runs on your computer, not in a headless sandbox.
 """
 import argparse
+import re
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -23,6 +25,7 @@ import teach
 from run import VIEWPORT
 
 SCRIPTS = [config.ROOT / "static" / "describe.js", config.ROOT / "static" / "live.js"]
+QUIET_DB = -38  # below this there is no speech (speech near a laptop mic is about -20 to -30 dB)
 MIC_INPUT = {"linux": ["-f", "pulse", "-i", "default"], "darwin": ["-f", "avfoundation", "-i", ":0"]}
 
 
@@ -38,6 +41,15 @@ def start_mic(path: Path) -> subprocess.Popen | None:
         print(f"No microphone ({proc.stderr.read().decode().strip()[:200]}): recording without narration.")
         return None
     return proc
+
+
+def typical_loudness_db(wav: Path) -> float:
+    """How loud the louder seconds are (80th percentile): pauses don't count, and one click or pop doesn't either."""
+    out = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(wav), "-af",
+                          "asetnsamples=24000,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level",
+                          "-f", "null", "-"], capture_output=True, text=True).stderr
+    levels = [float(v) for v in re.findall(r"RMS_level=(-?[\d.]+)", out)]
+    return statistics.quantiles(levels, n=5)[-1] if len(levels) > 1 else 0.0
 
 
 def launch(p, headless: bool):
@@ -131,7 +143,11 @@ if __name__ == "__main__":
         print("Saving and converting…")
         rec_id = finish(session, args.csv, mic_path.read_bytes() if mic and mic_path.exists() else None)
 
-    events = recording.load(rec_id)["events"]
+    rec = recording.load(rec_id)
+    events = rec["events"]
     print(f"Saved {rec_id}: {len(events)} events. Compile it at {config.PORTAL_URL}/app/teach/{rec_id}")
+    if rec["meta"]["has_narration"] and (level := typical_loudness_db(rec["dir"] / "narration.wav")) < QUIET_DB:
+        print(f"The narration is almost silent ({level:.0f} dB): check the microphone and its input level. "
+              "It still compiles without narration.")
     if any(e.get("value") == "***" for e in events):
         print(f"A password was typed: set {teach.password_env(args.url)} in .env before compiling.")
