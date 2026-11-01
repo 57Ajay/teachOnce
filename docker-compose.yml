@@ -1,0 +1,25 @@
+# A private OrangeHRM for teaching on a real web app without a shared demo: uv run orangehrm_local.py
+services:
+  orangehrm-db:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: orangehrm
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      retries: 40
+    volumes:
+      - orangehrm-db:/var/lib/mysql
+  orangehrm:
+    image: orangehrm/orangehrm:5.9
+    ports:
+      - "127.0.0.1:8200:80"
+    depends_on:
+      orangehrm-db:
+        condition: service_healthy
+    volumes:
+      - orangehrm-conf:/var/www/html/lib/confs
+      - ./examples/orangehrm_install.yaml:/var/www/html/installer/cli_install_config.yaml:ro
+volumes:
+  orangehrm-db:
+  orangehrm-conf:

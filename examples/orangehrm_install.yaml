@@ -1,0 +1,28 @@
+# Answers for OrangeHRM's command-line installer (local Docker instance only; fake organization and admin).
+database:
+  hostName: orangehrm-db
+  hostPort: 3306
+  databaseName: orangehrm
+  privilegedDatabaseUser: root
+  privilegedDatabasePassword: orangehrm
+  useSameDbUserForOrangeHRM: y
+  orangehrmDatabaseUser: ~
+  orangehrmDatabasePassword: ~
+  isExistingDatabase: n
+  enableDataEncryption: n
+
+organization:
+  name: Demoland Staffing
+  country: US
+
+admin:
+  adminUserName: Admin
+  adminPassword: Teach@Once1
+  adminEmployeeFirstName: Demo
+  adminEmployeeLastName: Admin
+  workEmail: admin@example.com
+  contactNumber: ~
+  registrationConsent: false
+
+license:
+  agree: y

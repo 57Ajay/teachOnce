@@ -4,6 +4,7 @@ import json
 import re
 import threading
 import time
+import traceback
 from datetime import datetime
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -103,6 +104,7 @@ def start_compile(rec_id: str):
             teach.compile_recording(rec_id, on_stage=job["stages"].append)
             job["state"] = "done"
         except Exception as e:
+            traceback.print_exc()
             job.update(state="failed", error=str(e)[:600])
 
     threading.Thread(target=work, daemon=True).start()
@@ -226,6 +228,7 @@ def start_run(body: RunIn):
             run.run(config.ROOT / body.workflow, rows_csv, limit=body.rows, run_id=run_id, heal=body.heal)
             RUNS[run_id]["state"] = "done"
         except (Exception, SystemExit) as e:
+            traceback.print_exc()
             run_dir = config.RUNS_DIR / run_id
             run_dir.mkdir(parents=True, exist_ok=True)
             with (run_dir / "events.jsonl").open("a") as f:

@@ -66,7 +66,9 @@ The same pipeline on [OrangeHRM's public demo](https://opensource-demo.orangehrm
 | Compile | 92 s, $0.21, first try (no repair), dry run on 3 rows |
 | Run | 6/6 rows (5 from the CLI, 1 from the app), **0 model calls**, ~10 s per row (each row signs in on the shared demo) |
 
-Healing is shown on the portal only: a real site can't be redesigned on demand. Fake candidates only, a handful of rows.
+On a private OrangeHRM in Docker (`uv run orangehrm_local.py`, below): compile 76 s, $0.21, first try; **8/8 rows, 0 model calls, ~6.8 s per row**.
+
+The shared demo is used by everyone: within a day its vacancies were deleted and replaced several times by other visitors and test bots, so a run that picks a vacancy from the CSV failed with "the list has no option ...". For anything repeatable, use the local instance. Healing is shown on the portal only: a real site can't be redesigned on demand. Fake candidates only.
 
 ## Quick start
 
@@ -89,19 +91,21 @@ Open **http://localhost:8000/app/** in Chrome. Everything happens in the browser
 
 `uv run reset.py` puts the demo back to the start: original site, no runs, workflows as they were taught. Recordings are kept.
 
-**Teach on another site** (needs a display; narration uses the default microphone):
+**Teach on a real web app** (needs Docker and a display; narration uses the default microphone). Start a private OrangeHRM with the vacancies the sample CSV uses (~1 min the first time; `--down` stops it, the data is kept):
 
 ```bash
-uv run teach_live.py https://opensource-demo.orangehrmlive.com/web/index.php/auth/login --csv examples/orangehrm-candidates.csv
+uv run orangehrm_local.py
+uv run teach_live.py http://localhost:8200/web/index.php/auth/login --csv examples/orangehrm-candidates.csv
 ```
 
-A browser opens; do the task once (the demo login is shown on its page), then press Enter in the terminal. If you typed a password, put it in `.env` under the name it prints (`ORANGEHRMLIVE_PASSWORD`). The recording appears in the app; compile and run it there, on the rows of the CSV.
+A browser opens; do the task once (login `Admin` / `Teach@Once1`), then press Enter in the terminal. Put the password in `.env` under the name it prints (`LOCALHOST_PASSWORD`). The recording appears in the app; compile and run it there, on the rows of the CSV. Any other site works the same way (`teach_live.py <url>`).
 
 ## Command line
 
 | Command | |
 |---|---|
 | `uv run teach_live.py <url> [--csv rows.csv]` | Teach on any website. |
+| `uv run orangehrm_local.py [--down]` | A private OrangeHRM in Docker for the candidates example. |
 | `uv run teach.py <rec_id>` | Compile a recording (for portal recordings the portal must be running). |
 | `uv run run.py <workflow> data/rows.csv [--no-heal]` | Run a workflow over the rows. |
 | `uv run bench.py [--redesigns 20] [--rows 5]` | The healing benchmark on random redesigns (~$1). |
@@ -118,6 +122,7 @@ A browser opens; do the task once (the demo login is shown on its page), then pr
 | `portal.py`, `templates/portal/` | The fictional portal, its redesign levels and random redesigns. |
 | `static/recorder.js`, `recording.py` | The teach studio and what it records. |
 | `teach_live.py`, `static/live.js` | The recorder for any website. |
+| `orangehrm_local.py`, `docker-compose.yml` | A private OrangeHRM (MariaDB + OrangeHRM 5.9) set up for the example task. |
 | `teach.py`, `understand.py`, `compiler.py` | Recording → Voice Transcribe → Muse Spark → Muse Wonder → lint → dry run → export. |
 | `workflow.py`, `locate.py`, `run.py` | The workflow format and the interpreter that runs it. |
 | `heal.py`, `sam.py` | Self-healing with Muse Spark and SAM 3.1. |
