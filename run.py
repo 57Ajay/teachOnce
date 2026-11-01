@@ -11,6 +11,9 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlsplit
+
+import httpx
 
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, expect, sync_playwright
@@ -287,6 +290,20 @@ def run_row(browser, wf: Workflow, row_idx: int, row: dict, run_dir: Path, emit,
     return result, wf
 
 
+def reset_test_site(start_url: str) -> bool:
+    """Demoland Hire (test-site/) gets its seed data back before every run and compile dry run, so tasks that add or
+    remove candidates always start from the same 16 people."""
+    site, test = urlsplit(start_url), urlsplit(config.TEST_SITE_URL)
+    local = {"localhost", "127.0.0.1"}
+    if site.port != test.port or site.hostname not in local or test.hostname not in local:
+        return False
+    try:
+        httpx.post(f"{config.TEST_SITE_URL}/api/reset", timeout=5).raise_for_status()
+    except httpx.HTTPError as e:
+        raise RuntimeError(f"the test site is not running at {config.TEST_SITE_URL} (cd test-site && bun run dev)") from e
+    return True
+
+
 def run(workflow_path, csv_path, start_row: int = 0, limit: int | None = None, headless: bool = True,
         run_id: str | None = None, on_event=None, heal: bool = True) -> dict:
     wf = workflow.load(workflow_path)
@@ -318,7 +335,7 @@ def run(workflow_path, csv_path, start_row: int = 0, limit: int | None = None, h
 
     started, start_version = time.monotonic(), wf.version
     emit("run_start", run_id=run_id, workflow=f"{wf.id}.v{wf.version}", start_url=wf.start_url, rows=len(rows),
-         start_row=start_row, heal=heal)
+         start_row=start_row, heal=heal, site_reset=reset_test_site(wf.start_url))
     results = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless, executable_path=config.CHROMIUM_PATH)

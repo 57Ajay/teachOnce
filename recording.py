@@ -19,8 +19,8 @@ def strip_required(name: str) -> str:
 
 def stable_css(css: str) -> bool:
     """Only id selectors survive as locators; a positional path can match a different element after a redesign.
-    So can an id React generates from render order (useId: "_r_1_", older ":r1:")."""
-    return bool(re.fullmatch(r"#[\w-]+", css or "")) and not re.fullmatch(r"#_r_\w+_", css)
+    So can an id React generates from render order (useId: "_r_1_", also as a prefix: "_r_1_-date")."""
+    return bool(re.fullmatch(r"#[\w-]+", css or "")) and not re.match(r"#_r_\w+?_", css)
 
 
 def is_field(target: dict) -> bool:
@@ -54,9 +54,9 @@ def picked_from_list(opener: dict, option: dict) -> dict:
 def normalize(raw: list[dict]) -> list[dict]:
     """Keep one event per user intent.
 
-    Clicks on form fields and labels are dropped (the change event carries the result), as are
-    Tab presses and submits caused by the click or Enter just before them. Opening a custom dropdown
-    and clicking an option becomes one select.
+    Clicks on form fields and labels are dropped (the change event carries the result), as are clicks
+    on nothing replayable, Tab presses and submits caused by the click or Enter just before them.
+    Opening a custom dropdown and clicking an option becomes one select.
     """
     out = []
     for e in sorted(raw, key=lambda e: e["ts_ms"]):
@@ -74,10 +74,18 @@ def normalize(raw: list[dict]) -> list[dict]:
         if e["type"] == "submit" and out and out[-1]["type"] in ("click", "keydown") and e["ts_ms"] - out[-1]["ts_ms"] < 1000:
             continue
         out.append(dict(e))
+    out = [e for e in out if e["type"] != "click" or replayable(e.get("target") or {})]
     for i, e in enumerate(out):
         e["idx"] = i
         e["action"] = action_for(e)
     return out
+
+
+def replayable(target: dict) -> bool:
+    """A click on something with no role, label, placeholder or id (the empty area around a field, a table cell)
+    did nothing a replay could find again."""
+    return bool(target.get("role") or strip_required(target.get("label_text")) or target.get("placeholder")
+                or stable_css(target.get("css")))
 
 
 def ffmpeg(*args):
@@ -129,7 +137,9 @@ def load(rec_id: str) -> dict:
     d = REC_DIR / rec_id
     if not (d / "meta.json").exists():
         raise FileNotFoundError(rec_id)
-    events = [json.loads(line) for line in (d / "events.jsonl").read_text().splitlines()]
+    raw = d / "events_raw.jsonl"  # normalized again on load, so recorder fixes reach older recordings
+    events = normalize([json.loads(line) for line in raw.read_text().splitlines()]) if raw.exists() else \
+        [json.loads(line) for line in (d / "events.jsonl").read_text().splitlines()]
     return {"meta": json.loads((d / "meta.json").read_text()), "events": events, "dir": d}
 
 

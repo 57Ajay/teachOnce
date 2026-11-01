@@ -9,7 +9,8 @@ FAKE_MEDIA = ["--auto-accept-this-tab-capture", "--use-fake-ui-for-media-stream"
 
 
 def ev(ts, type_, tag="input", input_type="text", name="", **extra):
-    return {"ts_ms": ts, "type": type_, "target": {"tag": tag, "type": input_type, "accessible_name": name}, **extra}
+    role = "button" if tag == "button" else ""
+    return {"ts_ms": ts, "type": type_, "target": {"tag": tag, "type": input_type, "role": role, "accessible_name": name}, **extra}
 
 
 def test_normalize_keeps_one_event_per_intent():
@@ -49,11 +50,22 @@ def test_normalize_turns_a_custom_dropdown_pick_into_a_select():
         {"ts_ms": 200, "type": "click", "target": opener},                  # opened and closed again
         {"ts_ms": 300, "type": "click", "target": opener},
         {"ts_ms": 400, "type": "click", "target": option},
-        {"ts_ms": 500, "type": "click", "target": {"tag": "button", "type": "submit", "accessible_name": "Save"}},
+        {"ts_ms": 500, "type": "click", "target": {"tag": "button", "type": "submit", "role": "button", "accessible_name": "Save"}},
     ]
     out = recording.normalize(raw)
     assert [(e["action"], e.get("value")) for e in out] == [("select", "Software Engineer"), ("click", None)]
     assert out[0]["target"]["label_text"] == "Vacancy" and out[0]["ts_ms"] == 300
+
+
+def test_normalize_drops_clicks_on_nothing_replayable():
+    raw = [
+        {"ts_ms": 100, "type": "click", "target": {"tag": "div", "role": "", "accessible_name": "", "css": "form > div"}},
+        {"ts_ms": 200, "type": "click", "target": {"tag": "td", "role": "", "accessible_name": "Will be sent", "css": "td"}},
+        {"ts_ms": 300, "type": "click", "target": {"tag": "div", "role": "", "label_text": "Vacancy", "css": "div > div"}},
+        {"ts_ms": 400, "type": "click", "target": {"tag": "button", "role": "button", "accessible_name": "Save", "css": "button"}},
+    ]
+    assert [e["target"]["tag"] for e in recording.normalize(raw)] == ["div", "button"]
+    assert not recording.stable_css("#_r_2_-date") and recording.stable_css("#veh_no")
 
 
 def test_studio_records_a_full_teach_session(base_url, tmp_path, monkeypatch):

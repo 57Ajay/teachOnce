@@ -146,3 +146,14 @@ def test_a_click_on_the_searched_result_follows_the_search_variable():
     compiler.template_picks(wf, events)
     assert [loc.model_dump(exclude_none=True) for loc in wf.steps[2].target.locators] == [
         {"kind": "role", "role": "link", "name": "{{name}}"}]
+
+
+def test_a_recorded_value_from_a_csv_column_must_become_a_variable():
+    events = teach.final_pass(RECORDED)
+    hints = compiler.column_hints(compiler.skeleton(events), {"vehicle_no": {"NV07AB1234", "KA01X1"}, "mobile": {"1"}})
+    assert hints[0]["matches_csv_column"] == "vehicle_no" and "matches_csv_column" not in hints[1]
+    constant = wonder_output()
+    constant["steps"][1]["value"] = "NV07AB1234"
+    problems = compiler.lint(compiler.to_workflow(constant, "r"), events, GRAPH, COLUMNS, SITE, {"vehicle_no": {"NV07AB1234"}})
+    assert problems == ["s02: the recorded value 'NV07AB1234' is a value of CSV column 'vehicle_no', so it must be a variable "
+                        "bound to that column"]

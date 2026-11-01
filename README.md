@@ -110,7 +110,7 @@ cd test-site && bun install && bun run dev
 uv run teach_live.py http://localhost:3000/login --csv examples/hire-add-candidates.csv
 ```
 
-Do the task once, then press Enter in the terminal. Put the password in `.env` as `LOCALHOST_3000_PASSWORD`. Compile and run it in the app. Compiling (a dry run on the first two CSV rows) and running change the site's data: reset it (Settings → Reset demo data) before teaching and again before running. The other tasks use `examples/hire-remove-candidates.csv` and `examples/hire-schedule-interviews.csv`; [DOCS.md](DOCS.md#demoland-hire-test-site) lists their steps.
+Do the task once, then press Enter in the terminal. Put the password in `.env` as `LOCALHOST_3000_PASSWORD`. Compile and run it in the app. Compiling (a dry run on the first two CSV rows) and runs reset the site's data first, so every run starts from the same 16 candidates. The other tasks use `examples/hire-remove-candidates.csv` and `examples/hire-schedule-interviews.csv`; [DOCS.md](DOCS.md#demoland-hire-test-site) lists their steps.
 
 **Teach on OrangeHRM** (needs Docker and a display). Start a private OrangeHRM with the vacancies the sample CSV uses (~1 min the first time; `--down` stops it, the data is kept):
 

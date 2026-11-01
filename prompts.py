@@ -20,7 +20,7 @@ In `outputs`, list values the task produces that should be saved for each row (f
 
 If uncertain, set confidence low rather than guessing."""
 
-COMPILE_VERSION = "compile-v5"
+COMPILE_VERSION = "compile-v6"
 COMPILE = """You are the compiler of Teach-Once. You turn one recorded demonstration of a web task into a deterministic, parameterized workflow that a replay engine runs for every row of a CSV file with no AI in the loop.
 
 You get JSON with:
@@ -36,12 +36,13 @@ Produce the workflow:
 - `action`: the skeleton action (fill, fill_date, select, check, uncheck, click, press).
 - `value`: for variables "{{variable_name}}". For constants the recorded value. A masked "***" value is a password: use "{{password}}" and add the secret {"name": "password", "env": <password_env>}. For check, uncheck and click: null.
 - Radio buttons and options picked per row: put the template in the locator instead (role "radio" with name "{{variable_name}}", and a label locator with text "{{variable_name}}"), value null.
+- A skeleton entry with `matches_csv_column` recorded a value that appears in that CSV column, so it changes per row: make it a variable bound to that column, even if the step graph calls it a constant (radio buttons: put the template in the locator, as described for them).
 - Search results: a skeleton entry with `picks_result_of` clicks a result whose visible name contains what was typed in that earlier entry (typed "ines", clicked "Ines Duarte"). That typed value is a variable: map it to the CSV column holding the name the result shows (e.g. a full name), not to another identifier. Its role locator name will be set to the same template automatically.
 - `target.locators`: start from the skeleton candidates, keep their order (role, label, placeholder, text, css). Copy css selectors exactly; never invent selectors. Shorten a link or button name to its visible title when the recorded name also contains a description. Drop a placeholder or text locator that contains the recorded value of a variable.
 - `target.description` and `target.noun_phrase`: from the step graph.
 - `check`: a password field: none (never read a secret back). a click that navigated: url_contains with the stable part of the next page path (no ids or numbers that change per run) that is not already part of the current page's path (from "/items/add" to "/items/add/83": "/items/add/"). fill, fill_date and select: value_equals with value null. check, uncheck: none.
 - Outputs: for each step-graph output add an `extract` step right after the step that lands on the output's page (the skeleton entry whose navigated_to is that page), before any step that leaves it: `output` = the output name, target = a role "row" locator whose name is the label next to the value (plus a text locator if useful), `pattern` = a regex matching every plausible value of that output, not only the example: allow thousands separators, more or fewer digits, other letters (e.g. "DTP-\\d{4}-\\d{6}", "D\\$ [\\d,]+\\.\\d{2}"), check none.
-- `variables`: one per variable in the step graph: `name`, `column` = the matching name from csv_columns (exact spelling; pick the closest meaning), `type` "string", `example` = the recorded value, `description`.
+- `variables`: one per variable in the step graph (plus the `matches_csv_column` ones): `name`, `column` = the matching name from csv_columns (exact spelling; pick the closest meaning). A value with no column of the same meaning (e.g. free-text notes when the CSV has no notes column) is a constant: keep the recorded value, never borrow an unrelated column, `type` "string", `example` = the recorded value, `description`.
 - `optional`: false for every step.
 
 Follow the schema exactly."""
