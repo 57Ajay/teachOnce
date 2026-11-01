@@ -1,7 +1,7 @@
 """Teach on any website: a browser opens at the URL, you do the task once (narrating if you like), then press Enter.
 
 The recording is saved like a studio recording and compiles with the Compile button in the app.
-Usage: uv run teach_live.py <url> [--csv examples/orangehrm-candidates.csv] [--no-mic]
+Usage: uv run teach_live.py <url> [--csv examples/hire-add-candidates.csv] [--no-mic]
 Needs a display (and a microphone for narration), so it runs on your computer, not in a headless sandbox.
 """
 import argparse

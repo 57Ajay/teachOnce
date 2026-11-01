@@ -34,7 +34,7 @@ def on_portal(url: str) -> bool:
 
 def password_env(url: str) -> str:
     """Where a password typed while teaching comes from at run time: PORTAL_PASSWORD, or one per site
-    (https://opensource-demo.orangehrmlive.com -> ORANGEHRMLIVE_PASSWORD, http://localhost:3000 -> LOCALHOST_3000_PASSWORD)."""
+    (https://app.example.com -> EXAMPLE_PASSWORD, http://localhost:3000 -> LOCALHOST_3000_PASSWORD)."""
     if on_portal(url):
         return "PORTAL_PASSWORD"
     u = urlsplit(url)
@@ -138,12 +138,15 @@ def dry_run(wf: workflow.Workflow, rec_dir, attempt: int, csv_rows: list[dict], 
     return f"Dry run row {failed['row_idx']} ({values}) failed at step {e['step_id']} ({e['kind']}): {e['message']}"
 
 
-def cached_json(path, compute):
-    if path.exists():
-        return json.loads(path.read_text())
-    value = compute()
-    path.write_text(json.dumps(value, indent=2))
-    return value
+def step_graph(rec_dir, events: list[dict], turns: list[dict]) -> dict:
+    """Spark's step graph, reused while the event table it was made from is unchanged (a recorder fix can change it)."""
+    path, table = rec_dir / "step_graph.json", event_table(events)
+    cached = json.loads(path.read_text()) if path.exists() else {}
+    if cached.pop("event_table", None) == table:
+        return cached
+    graph = understand.understand(rec_dir / "teach.mp4", table, turns)
+    path.write_text(json.dumps({**graph, "event_table": table}, indent=2))
+    return graph
 
 
 def compile_recording(rec_id: str, csv_path=None, on_stage=print):
@@ -151,7 +154,9 @@ def compile_recording(rec_id: str, csv_path=None, on_stage=print):
     d, meta = rec["dir"], rec["meta"]
     with open(csv_path or rows_csv(meta), newline="") as f:
         reader = csv.DictReader(f)
-        columns, csv_rows = reader.fieldnames, [row for _, row in zip(range(DRY_RUN_CSV_ROWS), reader)]
+        columns, all_rows = reader.fieldnames, list(reader)
+    csv_rows = all_rows[:DRY_RUN_CSV_ROWS]
+    csv_values = {c: {row[c] for row in all_rows} for c in columns}
     portal = on_portal(meta["start_url"])
     if portal:
         httpx.get(f"{config.PORTAL_URL}/portal/admin/drift").raise_for_status()  # dry run needs the portal
@@ -165,15 +170,15 @@ def compile_recording(rec_id: str, csv_path=None, on_stage=print):
     on_stage("transcribe")
     turns = transcribe(rec)
     on_stage("understand")
-    graph = cached_json(d / "step_graph.json",
-                        lambda: understand.understand(d / "teach.mp4", event_table(events), turns))
+    graph = step_graph(d, events, turns)
     on_stage("compile")
-    wf, raw = compiler.compile_workflow(events, graph, columns, rec_id, site)
+    wf, raw = compiler.compile_workflow(events, graph, columns, rec_id, site, csv_values=csv_values)
     on_stage("dry_run")
     error = dry_run(wf, d, 1, csv_rows, portal)
     if error:
         on_stage(f"repair: {error}")
-        wf, raw = compiler.compile_workflow(events, graph, columns, rec_id, site, feedback=error, previous=raw)
+        wf, raw = compiler.compile_workflow(events, graph, columns, rec_id, site, feedback=error, previous=raw,
+                                            csv_values=csv_values)
         error = dry_run(wf, d, 2, csv_rows, portal)
     if error:
         raise RuntimeError(error)

@@ -117,13 +117,13 @@ def test_lint_accepts_a_faithful_workflow_and_names_each_problem():
 def test_live_recordings_get_their_own_start_url_and_password_env():
     assert teach.on_portal("/portal/login") and teach.on_portal("{{PORTAL_URL}}/portal/login")
     assert teach.on_portal("http://127.0.0.1:8000/portal/login")
-    live = "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login"
+    live = "https://app.example.com/web/login"
     assert not teach.on_portal(live)
-    assert teach.password_env(live) == "ORANGEHRMLIVE_PASSWORD"
+    assert teach.password_env(live) == "EXAMPLE_PASSWORD"
     assert teach.password_env("/portal/login") == "PORTAL_PASSWORD"
     assert teach.password_env("http://10.0.0.5:8080/login") == "10_0_0_5_8080_PASSWORD"
     assert teach.password_env("http://localhost:3000/login") == "LOCALHOST_3000_PASSWORD"
-    assert teach.workflow_start_url({"start_url": live}, "/web/index.php/auth/login") == live
+    assert teach.workflow_start_url({"start_url": live}, "/web/login") == live
     assert teach.workflow_start_url({"start_url": "/portal/login"}, "/portal/login") == "{{PORTAL_URL}}/portal/login"
 
 
@@ -146,3 +146,14 @@ def test_a_click_on_the_searched_result_follows_the_search_variable():
     compiler.template_picks(wf, events)
     assert [loc.model_dump(exclude_none=True) for loc in wf.steps[2].target.locators] == [
         {"kind": "role", "role": "link", "name": "{{name}}"}]
+
+
+def test_a_recorded_value_from_a_csv_column_must_become_a_variable():
+    events = teach.final_pass(RECORDED)
+    hints = compiler.column_hints(compiler.skeleton(events), {"vehicle_no": {"NV07AB1234", "KA01X1"}, "mobile": {"1"}})
+    assert hints[0]["matches_csv_column"] == "vehicle_no" and "matches_csv_column" not in hints[1]
+    constant = wonder_output()
+    constant["steps"][1]["value"] = "NV07AB1234"
+    problems = compiler.lint(compiler.to_workflow(constant, "r"), events, GRAPH, COLUMNS, SITE, {"vehicle_no": {"NV07AB1234"}})
+    assert problems == ["s02: the recorded value 'NV07AB1234' is a value of CSV column 'vehicle_no', so it must be a variable "
+                        "bound to that column"]

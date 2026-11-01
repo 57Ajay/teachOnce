@@ -134,16 +134,19 @@ def to_workflow(out: dict, rec_id: str) -> Workflow:
     for s in out["steps"]:
         step = strip_nulls(s)
         step["check"] = strip_nulls(s["check"])
-        if s["target"]:
+        if s["target"] and s["action"] != "goto":  # a goto has nothing to find before navigating
             step["target"] = dict(s["target"], locators=[strip_nulls(loc) for loc in s["target"]["locators"]])
+        else:
+            step.pop("target", None)
         steps.append(step)
     return Workflow.model_validate({**out, "version": 1, "source_recording": rec_id, "steps": steps})
 
 
-def lint(wf: Workflow, events: list[dict], graph: dict, columns: list[str], site: dict) -> list[str]:
+def lint(wf: Workflow, events: list[dict], graph: dict, columns: list[str], site: dict,
+         csv_values: dict[str, set[str]] | None = None) -> list[str]:
     """Deterministic checks of Wonder's output against the recording."""
     problems = []
-    sk = skeleton(events)
+    sk = column_hints(skeleton(events), csv_values or {})
     actions = [st for st in wf.steps if st.action not in ("goto", "extract")]
     if len(actions) != len(sk):
         problems.append(f"expected {len(sk)} action steps, one per skeleton entry; got {len(actions)}")
@@ -152,6 +155,10 @@ def lint(wf: Workflow, events: list[dict], graph: dict, columns: list[str], site
     problems += [f"secret {sec.name!r}: env must be {site['password_env']!r}" for sec in wf.secrets
                  if sec.env != site["password_env"]]
     for st, entry in zip(actions, sk):
+        templated = [st.value] + [loc.name or loc.text for loc in (st.target.locators if st.target else [])]
+        if entry.get("matches_csv_column") and not any(t and TEMPLATE.search(t) for t in templated):
+            problems.append(f"{st.id}: the recorded value {entry['recorded_value']!r} is a value of CSV column "
+                            f"{entry['matches_csv_column']!r}, so it must be a variable bound to that column")
         if st.check.kind == "url_contains" and st.check.value and st.check.value in entry["page"]:
             problems.append(f"{st.id}: url_contains {st.check.value!r} is already true on {entry['page']}; "
                             f"use a part only {entry['navigated_to']} has")
@@ -180,11 +187,23 @@ def lint(wf: Workflow, events: list[dict], graph: dict, columns: list[str], site
     return problems
 
 
+def column_hints(entries: list[dict], csv_values: dict[str, set[str]]) -> list[dict]:
+    """A recorded value found in exactly one CSV column ("Video call" in interview_type) changes per row, whatever the
+    video suggested."""
+    for entry in entries:
+        value = entry["recorded_value"]
+        columns = [c for c, values in csv_values.items() if value and value != "***" and value in values]
+        if len(columns) == 1:
+            entry["matches_csv_column"] = columns[0]
+    return entries
+
+
 def compile_workflow(events: list[dict], graph: dict, columns: list[str], rec_id: str, site: dict,
-                     feedback: str | None = None, previous: dict | None = None) -> tuple[Workflow, dict]:
+                     feedback: str | None = None, previous: dict | None = None,
+                     csv_values: dict[str, set[str]] | None = None) -> tuple[Workflow, dict]:
     """One Wonder call, validated and linted. Problems trigger one repair call that sees the error text."""
     payload = {"start_url": site["start_url"], "start_page": events[0]["url"], "password_env": site["password_env"],
-               "skeleton": skeleton(events), "step_graph": graph, "csv_columns": columns}
+               "skeleton": column_hints(skeleton(events), csv_values or {}), "step_graph": graph, "csv_columns": columns}
     text = json.dumps(payload, indent=1)
     if feedback:
         text += f"\n\nYOUR PREVIOUS WORKFLOW:\n{json.dumps(previous)}\n\nIT FAILED:\n{feedback}\nFix it."
@@ -203,11 +222,12 @@ def compile_workflow(events: list[dict], graph: dict, columns: list[str], rec_id
     try:
         wf = to_workflow(out, rec_id)
         template_picks(wf, events)
-        problems = lint(wf, events, graph, columns, site)
+        problems = lint(wf, events, graph, columns, site, csv_values)
     except ValidationError as e:
         problems = [str(e)]
     if problems and not feedback:
-        return compile_workflow(events, graph, columns, rec_id, site, feedback="\n".join(problems), previous=out)
+        return compile_workflow(events, graph, columns, rec_id, site, feedback="\n".join(problems), previous=out,
+                                csv_values=csv_values)
     if problems:
         raise CompileError("; ".join(problems))
     add_anchors(wf, events)
