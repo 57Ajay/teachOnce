@@ -13,7 +13,7 @@
   pre { background: #0b0d12; border: 1px solid var(--line); border-radius: 6px; padding: 12px; overflow: auto; max-height: 460px; font-size: 12px; }
 </style>
 <h1>Recording {{ meta.rec_id }}</h1>
-<p class="muted">{{ meta.started_at }} · {{ '%.1f' % (meta.duration_ms / 1000) }} s · {{ events|length }} events · drift level {{ meta.drift_level }}</p>
+<p class="muted">{{ meta.started_at }} · {{ '%.1f' % (meta.duration_ms / 1000) }} s · {{ events|length }} events · {% if meta.site %}{{ meta.site }}{% if meta.csv %} · rows from <code>{{ meta.csv }}</code>{% endif %}{% else %}portal drift level {{ meta.drift_level }}{% endif %}</p>
 
 <div class="card">
   <div style="display:flex;align-items:center;gap:14px">
@@ -21,7 +21,7 @@
     <button class="btn" id="compile">{{ 'Recompile' if compiled else 'Compile workflow' }}</button>
     {% if compiled %}<span class="muted">{{ compiled.workflow }} · {{ compiled.seconds }} s · ${{ '%.3f' % compiled.cost_usd }}</span>{% endif %}
   </div>
-  <p class="muted" style="margin:8px 0 0">Voice Transcribe → Muse Spark (video + events + narration) → Muse Wonder (workflow) → dry run on the portal → Wonder export script.</p>
+  <p class="muted" style="margin:8px 0 0">Voice Transcribe → Muse Spark (video + events + narration) → Muse Wonder (workflow) → dry run on the site → Wonder export script.</p>
   <ul class="stages" id="stages"></ul>
 </div>
 
@@ -55,7 +55,7 @@
 <div class="card">
   <h2 style="font-size:16px;margin:0 0 10px">Workflow compiled by Muse Wonder: {{ workflow.id }}.v{{ workflow.version }}
     <a class="muted" style="font-size:13px;font-weight:400" href="/app/workflows/{{ compiled.workflow }}">json</a>
-    <button class="btn" id="run" style="margin-left:12px;font-size:13px">▶ Run 50 rows</button> <span class="muted" id="run-error" style="font-size:13px;font-weight:400"></span></h2>
+    <button class="btn" id="run" style="margin-left:12px;font-size:13px">▶ Run {{ run_rows }} rows</button> <span class="muted" id="run-error" style="font-size:13px;font-weight:400"></span></h2>
   <table>
     <tr><th>Step</th><th>Action</th><th>Value</th><th>First locator</th><th>Check</th></tr>
     {% for s in workflow.steps %}
@@ -95,7 +95,7 @@
   const recId = {{ meta.rec_id | tojson }};
   {% if workflow %}
   document.getElementById("run").addEventListener("click", () =>
-    startRun({{ ('data/workflows/' ~ compiled.workflow) | tojson }}, 50, true, document.getElementById("run-error")));
+    startRun({{ ('data/workflows/' ~ compiled.workflow) | tojson }}, {{ run_rows }}, true, document.getElementById("run-error")));
   {% endif %}
   const list = document.getElementById("stages");
   const button = document.getElementById("compile");

@@ -56,6 +56,9 @@
     <div class="big" id="agent-usd">$0.00</div>
     <div><b id="agent-calls">0</b> model calls · <b id="agent-time">0 min</b> · {{ '%.0f' % (baseline.seconds / 60) }} min per row</div>
     <div class="muted" style="font-size:12px;margin-top:4px">Measured by <code>baseline.py</code>: {{ baseline.ok }}/{{ baseline.rows }} rows completed, ${{ '%.2f' % baseline.usd }} and {{ '%.0f' % baseline.turns }} model calls per row.</div>
+    {% elif not portal %}
+    <div class="label">Computer-use agent</div>
+    <p class="muted">Measured on the demo portal only, so there is no comparison for this site.</p>
     {% else %}
     <div class="label">Computer-use agent</div>
     <p class="muted">No baseline measured yet. Run <code>uv run baseline.py data/rows.csv</code>.</p>

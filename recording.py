@@ -29,7 +29,7 @@ def is_field(target: dict) -> bool:
 def action_for(event: dict) -> str:
     t = event.get("target") or {}
     match event["type"]:
-        case "change" if t.get("tag") == "select":
+        case "change" if t.get("tag") == "select" or event.get("picked"):
             return "select"
         case "change" if t.get("type") == "checkbox":
             return "check" if event.get("checked") else "uncheck"
@@ -45,15 +45,27 @@ def action_for(event: dict) -> str:
             return other
 
 
+def picked_from_list(opener: dict, option: dict) -> dict:
+    """A click that opened a custom dropdown, then a click on one of its options: one select on the opener."""
+    return dict(opener, type="change", value=strip_required(option["target"].get("accessible_name")), picked=True)
+
+
 def normalize(raw: list[dict]) -> list[dict]:
     """Keep one event per user intent.
 
     Clicks on form fields and labels are dropped (the change event carries the result), as are
-    Tab presses and submits caused by the click or Enter just before them.
+    Tab presses and submits caused by the click or Enter just before them. Opening a custom dropdown
+    and clicking an option becomes one select.
     """
     out = []
     for e in sorted(raw, key=lambda e: e["ts_ms"]):
         t = e.get("target") or {}
+        if e["type"] == "click" and t.get("role") == "option" and out and out[-1]["type"] == "click":
+            opener = out.pop()
+            while out and out[-1]["type"] == "click" and out[-1]["target"].get("css") == opener["target"].get("css"):
+                out.pop()  # opened and closed again before picking
+            out.append(picked_from_list(opener, e))
+            continue
         if e["type"] == "click" and (t.get("tag") == "label" or is_field(t)):
             continue
         if e["type"] == "keydown" and e.get("key") != "Enter":
@@ -72,7 +84,7 @@ def ffmpeg(*args):
 
 
 def to_mp4(src: Path, dst: Path, frame_rect: dict | None):
-    """Crop the tab video to the portal frame, then 720p at 10 fps (what Spark gets)."""
+    """Crop the studio's tab video to the portal frame (live recordings are the page already), then 720p at 10 fps."""
     filters = []
     if frame_rect:
         w, h = frame_rect["inner_w"], frame_rect["inner_h"]

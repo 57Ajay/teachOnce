@@ -27,6 +27,7 @@ READ_VALUE_JS = """e => e.tagName === 'SELECT' ? (e.options[e.selectedIndex]?.te
   : ['INPUT', 'TEXTAREA'].includes(e.tagName) ? e.value : e.innerText.trim()"""  # custom dropdowns show their value
 POLL_MS = 150
 OPTIONAL_WAIT_MS = 1500  # an optional step (a field the site may have dropped, a Next button) is skipped quickly
+IN_LABEL_JS = "e => ['checkbox', 'radio'].includes(e.type) && !!e.closest('label')"
 DATE_PATTERN = re.compile(r"(DD|MM|YYYY)([-/. ])(DD|MM|YYYY)\2(DD|MM|YYYY)")
 
 
@@ -71,6 +72,12 @@ def clear_interrupts(ctx: RowContext) -> bool:
 
 def screenshot(page: Page, **kw) -> bytes | None:
     """Headless Chromium sometimes can't capture a page that is still settling; retry briefly, then give up."""
+    try:
+        if not page.evaluate("document.body?.innerText.trim()"):  # a client-rendered page that is still loading
+            page.wait_for_function("document.body?.innerText.trim()", timeout=3000)
+            page.wait_for_load_state("networkidle", timeout=3000)
+    except PlaywrightError:
+        pass
     for _ in range(3):
         try:
             page.wait_for_load_state()
@@ -185,6 +192,11 @@ def execute(ctx: RowContext, step: Step):
                 page.get_by_role("option", name=value, exact=True).click(timeout=t)
             case "select":
                 el.select_option(label=value, timeout=t)
+            case "check" | "uncheck" if el.evaluate(IN_LABEL_JS):  # styled boxes are often covered by their label's art
+                if el.is_checked() != (step.action == "check"):
+                    el.locator("xpath=ancestor::label[1]").click(timeout=t)
+                if el.is_checked() != (step.action == "check"):
+                    raise StepFailed("action_failed", f"clicking its label did not {step.action} it")
             case "check":
                 el.check(timeout=t)
             case "uncheck":
@@ -291,7 +303,8 @@ def run(workflow_path, csv_path, start_row: int = 0, limit: int | None = None, h
         healer = healing.Healer(run_dir, emit)
 
     started, start_version = time.monotonic(), wf.version
-    emit("run_start", run_id=run_id, workflow=f"{wf.id}.v{wf.version}", rows=len(rows), start_row=start_row, heal=heal)
+    emit("run_start", run_id=run_id, workflow=f"{wf.id}.v{wf.version}", start_url=wf.start_url, rows=len(rows),
+         start_row=start_row, heal=heal)
     results = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless, executable_path=config.CHROMIUM_PATH)

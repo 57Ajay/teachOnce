@@ -9,7 +9,7 @@ Browser agents that ask a model what to do on every click are slow, expensive an
 3. **Run**: the workflow runs over a CSV file with no model calls at all.
 4. **Heal**: when a redesign breaks a step, Muse Spark works out what changed and SAM 3.1 finds the element on the new screen. The workflow is patched, verified and saved as a new version, and every later row runs with zero model calls again.
 
-Built for the Meta Global AI Developer Hackathon (indie track). The target site is **Demoland TransitPass Portal**, a fictional government-style e-service included in this repo. It is not a real service.
+Built for the Meta Global AI Developer Hackathon (indie track). The main target is **Demoland TransitPass Portal**, a fictional government-style e-service included in this repo (it is not a real service), because healing needs a site that can be redesigned on demand. Teaching and running also work on real sites: see [On a real site](#on-a-real-site-orangehrm).
 
 ## How it works
 
@@ -56,6 +56,18 @@ Compiling a 60–100 s recording takes 40–150 s and $0.22–0.45.
 | **20 random redesigns** (two-page forms, custom dropdowns, removed fields, popups, reworded everything...) | **20/20 recovered**, 100/100 rows, $0.055 per redesign |
 | A new mandatory field the rows have no data for; access blocked | **Stopped with the reason**, 2/2, one Spark call each |
 
+### On a real site: OrangeHRM
+
+The same pipeline on [OrangeHRM's public demo](https://opensource-demo.orangehrmlive.com) (a real open-source HR app with a shared demo instance), with `teach_live.py`: sign in, Recruitment → Add candidate, first and last name, vacancy (a custom dropdown), email and contact number (labels not linked to their inputs), consent (a styled checkbox), Save.
+
+| | |
+|---|---|
+| Recording | 19 s, 13 actions, no narration (driven by a script in a headless sandbox) |
+| Compile | 92 s, $0.21, first try (no repair), dry run on 3 rows |
+| Run | 6/6 rows (5 from the CLI, 1 from the app), **0 model calls**, ~10 s per row (each row signs in on the shared demo) |
+
+Healing is shown on the portal only: a real site can't be redesigned on demand. Fake candidates only, a handful of rows.
+
 ## Quick start
 
 Requires [uv](https://docs.astral.sh/uv/), `ffmpeg`, and Chrome or Chromium (teaching uses tab capture).
@@ -77,11 +89,20 @@ Open **http://localhost:8000/app/** in Chrome. Everything happens in the browser
 
 `uv run reset.py` puts the demo back to the start: original site, no runs, workflows as they were taught. Recordings are kept.
 
+**Teach on another site** (needs a display; narration uses the default microphone):
+
+```bash
+uv run teach_live.py https://opensource-demo.orangehrmlive.com/web/index.php/auth/login --csv examples/orangehrm-candidates.csv
+```
+
+A browser opens; do the task once (the demo login is shown on its page), then press Enter in the terminal. If you typed a password, put it in `.env` under the name it prints (`ORANGEHRMLIVE_PASSWORD`). The recording appears in the app; compile and run it there, on the rows of the CSV.
+
 ## Command line
 
 | Command | |
 |---|---|
-| `uv run teach.py <rec_id>` | Compile a recording (the portal must be running). |
+| `uv run teach_live.py <url> [--csv rows.csv]` | Teach on any website. |
+| `uv run teach.py <rec_id>` | Compile a recording (for portal recordings the portal must be running). |
 | `uv run run.py <workflow> data/rows.csv [--no-heal]` | Run a workflow over the rows. |
 | `uv run bench.py [--redesigns 20] [--rows 5]` | The healing benchmark on random redesigns (~$1). |
 | `uv run baseline.py data/rows.csv` | The computer-use agent on the same task (~$3). |
@@ -96,6 +117,7 @@ Open **http://localhost:8000/app/** in Chrome. Everything happens in the browser
 | `app.py` | The single FastAPI app: the portal under `/portal`, Teach-Once under `/app`, the run dashboard and its live event stream. |
 | `portal.py`, `templates/portal/` | The fictional portal, its redesign levels and random redesigns. |
 | `static/recorder.js`, `recording.py` | The teach studio and what it records. |
+| `teach_live.py`, `static/live.js` | The recorder for any website. |
 | `teach.py`, `understand.py`, `compiler.py` | Recording → Voice Transcribe → Muse Spark → Muse Wonder → lint → dry run → export. |
 | `workflow.py`, `locate.py`, `run.py` | The workflow format and the interpreter that runs it. |
 | `heal.py`, `sam.py` | Self-healing with Muse Spark and SAM 3.1. |
@@ -109,7 +131,8 @@ Open **http://localhost:8000/app/** in Chrome. Everything happens in the browser
 - Teach-Once does not get around bot detection or CAPTCHAs. When a site blocks automation it stops and tells you; an AI agent would be blocked the same way, at a higher cost.
 - Data the rows don't have can't be invented: a new mandatory field stops the run until you add a column or teach again.
 - A popup learned by a heal is dismissed by its button's name; a very generic name ("Continue") could match another button.
-- Teaching needs a Chromium-based browser (tab capture) on localhost.
+- The studio needs a Chromium-based browser (tab capture) and only frames the portal; other sites are taught with `teach_live.py`, which needs a display and records one tab.
+- On real sites, fields are found by role, label (also unlinked labels next to the field), placeholder or id. A field with none of these unique can't be located.
 
 ## License
 
