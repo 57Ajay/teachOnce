@@ -112,28 +112,30 @@ def event_table(events: list[dict]) -> str:
 
 
 def dry_run(wf: workflow.Workflow, rec_dir, attempt: int, csv_rows: list[dict], portal: bool) -> str | None:
-    """Run the draft (on the portal: at drift 0) on the recorded example plus a few CSV rows. Returns an error or None.
+    """Run the draft (on the portal: at drift 0) on the first CSV rows. Returns an error or None.
 
-    The CSV rows catch a workflow that only fits the one recorded example (e.g. an over-specific regex).
+    CSV rows catch a workflow that only fits the recorded example (e.g. an over-specific regex). The example itself is
+    only used without a CSV: teaching already did it once, and a task that changes data (add, remove) can't be repeated.
     """
     draft = rec_dir / f"draft{attempt}.json"
     draft.write_text(wf.model_dump_json(indent=2, exclude_defaults=True))
+    rows = [{v.column: row[v.column] for v in wf.variables} for row in csv_rows] or [{v.column: v.example for v in wf.variables}]
     examples = rec_dir / "examples.csv"
     with examples.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=[v.column for v in wf.variables])
         writer.writeheader()
-        writer.writerow({v.column: v.example for v in wf.variables})
-        writer.writerows({v.column: row[v.column] for v in wf.variables} for row in csv_rows)
+        writer.writerows(rows)
     if portal:
         httpx.post(f"{config.PORTAL_URL}/portal/admin/drift", json={"level": 0}).raise_for_status()
     run_id = f"dryrun_{rec_dir.name}_{attempt}"
-    summary = run.run(draft, examples, run_id=run_id)
+    summary = run.run(draft, examples, run_id=run_id, heal=False)  # test the workflow as compiled, never pay for heals
     if summary["failed"] == 0:
         return None
     results = [json.loads(line) for line in (config.RUNS_DIR / run_id / "results.jsonl").read_text().splitlines()]
     failed = next(r for r in results if r["error"])
     e = failed["error"]
-    return f"Dry run row {failed['row_idx']} failed at step {e['step_id']} ({e['kind']}): {e['message']}"
+    values = ", ".join(rows[failed["row_idx"]].values())
+    return f"Dry run row {failed['row_idx']} ({values}) failed at step {e['step_id']} ({e['kind']}): {e['message']}"
 
 
 def cached_json(path, compute):
