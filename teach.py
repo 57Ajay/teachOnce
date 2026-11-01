@@ -34,7 +34,7 @@ def on_portal(url: str) -> bool:
 
 def password_env(url: str) -> str:
     """Where a password typed while teaching comes from at run time: PORTAL_PASSWORD, or one per site
-    (https://opensource-demo.orangehrmlive.com -> ORANGEHRMLIVE_PASSWORD, http://localhost:3000 -> LOCALHOST_3000_PASSWORD)."""
+    (https://app.example.com -> EXAMPLE_PASSWORD, http://localhost:3000 -> LOCALHOST_3000_PASSWORD)."""
     if on_portal(url):
         return "PORTAL_PASSWORD"
     u = urlsplit(url)

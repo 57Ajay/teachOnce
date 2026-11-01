@@ -117,13 +117,13 @@ def test_lint_accepts_a_faithful_workflow_and_names_each_problem():
 def test_live_recordings_get_their_own_start_url_and_password_env():
     assert teach.on_portal("/portal/login") and teach.on_portal("{{PORTAL_URL}}/portal/login")
     assert teach.on_portal("http://127.0.0.1:8000/portal/login")
-    live = "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login"
+    live = "https://app.example.com/web/login"
     assert not teach.on_portal(live)
-    assert teach.password_env(live) == "ORANGEHRMLIVE_PASSWORD"
+    assert teach.password_env(live) == "EXAMPLE_PASSWORD"
     assert teach.password_env("/portal/login") == "PORTAL_PASSWORD"
     assert teach.password_env("http://10.0.0.5:8080/login") == "10_0_0_5_8080_PASSWORD"
     assert teach.password_env("http://localhost:3000/login") == "LOCALHOST_3000_PASSWORD"
-    assert teach.workflow_start_url({"start_url": live}, "/web/index.php/auth/login") == live
+    assert teach.workflow_start_url({"start_url": live}, "/web/login") == live
     assert teach.workflow_start_url({"start_url": "/portal/login"}, "/portal/login") == "{{PORTAL_URL}}/portal/login"
 
 

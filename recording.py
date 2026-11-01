@@ -122,7 +122,6 @@ def save(meta: dict, events: list[dict], screen: bytes, mic: bytes | None) -> st
     d = REC_DIR / rec_id
     d.mkdir(parents=True)
     write_jsonl(d / "events_raw.jsonl", events)
-    write_jsonl(d / "events.jsonl", normalize(events))
     (d / "screen.webm").write_bytes(screen)
     to_mp4(d / "screen.webm", d / "teach.mp4", meta.get("frame_rect"))
     if mic:
@@ -137,9 +136,8 @@ def load(rec_id: str) -> dict:
     d = REC_DIR / rec_id
     if not (d / "meta.json").exists():
         raise FileNotFoundError(rec_id)
-    raw = d / "events_raw.jsonl"  # normalized again on load, so recorder fixes reach older recordings
-    events = normalize([json.loads(line) for line in raw.read_text().splitlines()]) if raw.exists() else \
-        [json.loads(line) for line in (d / "events.jsonl").read_text().splitlines()]
+    raw = (d / "events_raw.jsonl").read_text().splitlines()
+    events = normalize([json.loads(line) for line in raw])  # normalized on load, so recorder fixes reach old recordings
     return {"meta": json.loads((d / "meta.json").read_text()), "events": events, "dir": d}
 
 
