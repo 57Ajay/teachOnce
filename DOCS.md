@@ -19,6 +19,7 @@
 | `heal.py` | Self-healing: Muse Spark triages what changed, SAM 3.1 grounds the element, the patch is verified and saved as the next version. |
 | `recording.py` | Saves a teach recording, cleans up raw DOM events, converts media with ffmpeg. |
 | `static/recorder.js` + `templates/app/studio.html` | The teach studio: recording toolbar + the portal in a same-origin frame. |
+| `test-site/` | Demoland Hire, a fictional recruiting app (Bun + React + TypeScript) with three demo tasks; see below. |
 | `teach_live.py` + `static/live.js` | Teach on any website: a Playwright-launched browser with the recorder injected into every page, screen video and mic narration. Saves the same recording format as the studio. |
 | `static/describe.js` | How an element is described (role, accessible name, label, css, box). Shared by the studio and, injected, by the healer. |
 | `examples/` | Committed sample workflows and the measured `baseline_summary.json`. Generated and healed workflows live in `data/workflows/` (git-ignored). |
@@ -117,11 +118,48 @@ uv run teach_live.py https://opensource-demo.orangehrmlive.com/web/index.php/aut
 
 Measured on OrangeHRM's public demo (Recruitment → Add candidate: names, a custom vacancy dropdown, email and contact number with unlinked labels, a styled consent checkbox, Save). The recording was made in the headless sandbox by a script driving `teach_live.py`'s browser, without narration (19 s, 13 actions). Compile: 92 s, $0.21, no repair; Spark found the five per-row values; the Save check waits for `/recruitment/addCandidate/` (the profile page), not the form's own path. Runs: 5/5 rows from the CLI and 1/1 from the app, 0 model calls, ~10 s per row (each row signs in on the shared demo). The candidates were checked in the site's candidate list.
 
-**A private OrangeHRM** (`uv run orangehrm_local.py`): the shared demo changes under you (on Nov 1 its vacancies were deleted and replaced several times within hours, by other visitors and by test bots creating `VAC_...` entries, and its theme was changed), so runs that pick a vacancy from the CSV fail there. `docker-compose.yml` runs MariaDB 11 and OrangeHRM 5.9 on `127.0.0.1:8200` with named volumes for the database and OrangeHRM's config. The script starts it, runs OrangeHRM's command-line installer once with `examples/orangehrm_install.yaml` (fake organization; admin `Admin` / `Teach@Once1`, a throwaway local login), then logs in and adds the CSV's vacancies through OrangeHRM's REST API (`/api/v2/admin/job-titles`, `/api/v2/recruitment/vacancies`, hiring manager = the admin's employee record). It is idempotent; `--down` stops the containers and keeps the data. A fresh setup takes ~53 s. The password env for `localhost` is `LOCALHOST_PASSWORD`. Measured: scripted teach (20 s, 13 actions) → compile 76 s, $0.21, first try → 8/8 rows, 0 model calls, ~6.8 s per row.
+**A private OrangeHRM** (`uv run orangehrm_local.py`): the shared demo changes under you (on Nov 1 its vacancies were deleted and replaced several times within hours, by other visitors and by test bots creating `VAC_...` entries, and its theme was changed), so runs that pick a vacancy from the CSV fail there. `docker-compose.yml` runs MariaDB 11 and OrangeHRM 5.9 on `127.0.0.1:8200` with named volumes for the database and OrangeHRM's config. The script starts it, runs OrangeHRM's command-line installer once with `examples/orangehrm_install.yaml` (fake organization; admin `Admin` / `Teach@Once1`, a throwaway local login), then logs in and adds the CSV's vacancies through OrangeHRM's REST API (`/api/v2/admin/job-titles`, `/api/v2/recruitment/vacancies`, hiring manager = the admin's employee record). It is idempotent; `--down` stops the containers and keeps the data. A fresh setup takes ~53 s. The password env for `localhost` is `LOCALHOST_8200_PASSWORD`. Measured: scripted teach (20 s, 13 actions) → compile 76 s, $0.21, first try → 8/8 rows, 0 model calls, ~6.8 s per row.
 
 Screenshots wait for client-rendered pages: if the page has no text yet, the runner waits (up to 3 s each) for text and for the network to go quiet. Server-rendered pages like the portal pay nothing.
 
 Site etiquette: only public demo instances meant to be tried, fake data, a handful of rows. If a site blocks automation or asks for a CAPTCHA, the run stops and says so; nothing here tries to get around that.
+
+## Demoland Hire (test site)
+
+`test-site/` is a fictional recruiting app built for Teach-Once demos: a modern single-page app we control, so tasks are repeatable (a shared public demo changes under you) and fake data is the only data. Bun + React 19 + TypeScript, no other dependencies: `server.ts` is Bun's full-stack server (it bundles `src/index.html` and its TSX on the fly, serves the JSON API and falls back to the app for every other path), data lives in memory and starts from `seed.json` (16 fake candidates, 5 jobs, 5 interviewers).
+
+```bash
+cd test-site && bun install
+bun run dev      # http://localhost:3000, hot reload
+bun run serve    # production mode (bundled once)
+bun run check    # type check
+```
+
+Login `recruiter@demoland.test` / `hire-demo-2026` (shown on the login page; `LOCALHOST_3000_PASSWORD` in `.env`). **Reset** puts the seed data back and deletes every interview: Settings → Reset demo data, `POST /api/reset`, or `uv run reset.py` (which also resets the portal and deletes runs). Restarting the server resets too.
+
+Pages: login, dashboard (stats, pipeline, upcoming interviews), candidates (search, stage filters, a row menu per candidate), add candidate (validated form, duplicate email rejected), profile (tabs), a three-step interview wizard, interview confirmation, interviews, jobs, settings. Client-side routing with `history.pushState` (no full page loads after login); the recorder sees these navigations through Playwright's `framenavigated`.
+
+Three tasks, easy to hard, each with a CSV in `examples/`:
+
+| Task | Steps | Controls | CSV |
+|---|---|---|---|
+| **Add a candidate** (easy) | sign in → Candidates → Add candidate → first/last name, email, phone, job opening → Save → profile page | text inputs, a native select | `hire-add-candidates.csv` (8 new people) |
+| **Remove a candidate** (medium) | sign in → Candidates → search by email → row menu (⋯ Actions) → Remove candidate → confirm dialog → list with a "was removed" banner | search box (the list filters as you type), menu, modal dialog | `hire-remove-candidates.csv` (6 seeded people) |
+| **Schedule an interview** (hard) | sign in → Candidates → search → Actions → Schedule interview → step 1: interview type, date, start time, duration → Continue → step 2: interviewer, calendar invite → Continue → step 3: review → Confirm → confirmation with an interview ID | radio cards and a segmented control (radios hidden behind their labels), a date input, a native select, a custom dropdown (`role=combobox` + `role=option`), a toggle switch (`role=switch` checkbox), a multi-step wizard on one URL, an extract step | `hire-schedule-interviews.csv` (8 seeded people) |
+
+The remove and schedule CSVs use different seeded candidates, so both run after one reset; the add CSV only has new emails (adding one twice fails with "A candidate with this email already exists"). `tests/test_test_site.py` checks the CSVs against `seed.json`. Compiling replays the task (dry run on the example plus the first two CSV rows), so **reset before compiling and before a run**.
+
+Measured (Nov 1; recordings driven by a script in the headless sandbox through `teach_live.py`'s browser, no narration; each teach used a candidate that is not in the CSVs):
+
+| Task | Actions | Compile (first try for all three, no repair) | Run (reset first, self-healing on) |
+|---|---|---|---|
+| Add | 11 | 58 s, $0.19 | 8/8, 0 model calls, 10.3 s (~1.0 s per row) |
+| Remove | 8 | 63 s, $0.19 | 6/6, 0 model calls, 9.7 s (~1.3 s per row) |
+| Schedule | 16 | 89 s, $0.26 | 8/8, 0 model calls, 16.9 s (~1.8 s per row), interview IDs IV-1042…IV-1049 extracted |
+
+Afterwards the API showed 18 candidates (16 + 8 − 6) and 8 interviews whose values match the CSV rows.
+
+Design choices that matter for automation, all of them normal on modern sites: labels are linked to their fields; generated React ids (`«r1»`) are not used as locators (only `#id` selectors are), so steps are found by role, label and placeholder; icons and avatar initials are `aria-hidden`, and `describe.js` leaves aria-hidden text out of accessible names like the browser does (an option reads "Priya Raman", not "PR Priya Raman"); every task ends on a URL the previous page doesn't contain (`/profile/17`, `/candidates?removed=…`, `/interviews/IV-1042`), so the last URL check waits for the save.
 
 ## Teach pipeline (recording → workflow)
 

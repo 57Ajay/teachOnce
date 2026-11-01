@@ -20,3 +20,4 @@ CHROMIUM_PATH = os.getenv("CHROMIUM_PATH") or None
 PORTAL_URL = os.getenv("PORTAL_URL", "http://127.0.0.1:8000")
 PORTAL_USER = os.getenv("PORTAL_USER", "operator")
 PORTAL_PASSWORD = os.getenv("PORTAL_PASSWORD", "demo123")
+TEST_SITE_URL = os.getenv("TEST_SITE_URL", "http://localhost:3000")

@@ -1,0 +1,211 @@
+{
+  "user": {
+    "name": "Jordan Lee",
+    "email": "recruiter@demoland.test",
+    "password": "hire-demo-2026"
+  },
+  "jobs": [
+    "Frontend Engineer",
+    "Backend Engineer",
+    "Product Designer",
+    "Data Analyst",
+    "Customer Success Lead"
+  ],
+  "stages": [
+    "Applied",
+    "Screening",
+    "Interview",
+    "Offer"
+  ],
+  "sources": [
+    "LinkedIn",
+    "Referral",
+    "Careers page",
+    "Job board"
+  ],
+  "interviewers": [
+    "Priya Raman",
+    "Daniel Okafor",
+    "Mei Chen",
+    "Lucas Ferreira",
+    "Grace Mensah"
+  ],
+  "candidates": [
+    {
+      "id": 1,
+      "firstName": "Asha",
+      "lastName": "Verma",
+      "email": "asha.verma@example.com",
+      "phone": "+1 555 0101",
+      "job": "Backend Engineer",
+      "stage": "Screening",
+      "source": "Referral",
+      "appliedOn": "2026-10-04"
+    },
+    {
+      "id": 2,
+      "firstName": "Ravi",
+      "lastName": "Kapoor",
+      "email": "ravi.kapoor@example.com",
+      "phone": "+1 555 0102",
+      "job": "Product Designer",
+      "stage": "Interview",
+      "source": "Careers page",
+      "appliedOn": "2026-10-07"
+    },
+    {
+      "id": 3,
+      "firstName": "Meera",
+      "lastName": "Nair",
+      "email": "meera.nair@example.com",
+      "phone": "+1 555 0103",
+      "job": "Data Analyst",
+      "stage": "Offer",
+      "source": "Job board",
+      "appliedOn": "2026-10-10"
+    },
+    {
+      "id": 4,
+      "firstName": "Kabir",
+      "lastName": "Sethi",
+      "email": "kabir.sethi@example.com",
+      "phone": "+1 555 0104",
+      "job": "Customer Success Lead",
+      "stage": "Applied",
+      "source": "LinkedIn",
+      "appliedOn": "2026-10-13"
+    },
+    {
+      "id": 5,
+      "firstName": "Nisha",
+      "lastName": "Menon",
+      "email": "nisha.menon@example.com",
+      "phone": "+1 555 0105",
+      "job": "Frontend Engineer",
+      "stage": "Screening",
+      "source": "Referral",
+      "appliedOn": "2026-10-16"
+    },
+    {
+      "id": 6,
+      "firstName": "Arjun",
+      "lastName": "Joshi",
+      "email": "arjun.joshi@example.com",
+      "phone": "+1 555 0106",
+      "job": "Backend Engineer",
+      "stage": "Interview",
+      "source": "Careers page",
+      "appliedOn": "2026-10-19"
+    },
+    {
+      "id": 7,
+      "firstName": "Leela",
+      "lastName": "Pillai",
+      "email": "leela.pillai@example.com",
+      "phone": "+1 555 0107",
+      "job": "Product Designer",
+      "stage": "Offer",
+      "source": "Job board",
+      "appliedOn": "2026-10-22"
+    },
+    {
+      "id": 8,
+      "firstName": "Imran",
+      "lastName": "Dutta",
+      "email": "imran.dutta@example.com",
+      "phone": "+1 555 0108",
+      "job": "Data Analyst",
+      "stage": "Applied",
+      "source": "LinkedIn",
+      "appliedOn": "2026-10-25"
+    },
+    {
+      "id": 9,
+      "firstName": "Sofia",
+      "lastName": "Marin",
+      "email": "sofia.marin@example.com",
+      "phone": "+1 555 0109",
+      "job": "Customer Success Lead",
+      "stage": "Screening",
+      "source": "Referral",
+      "appliedOn": "2026-10-28"
+    },
+    {
+      "id": 10,
+      "firstName": "Tomás",
+      "lastName": "Ruiz",
+      "email": "tomas.ruiz@example.com",
+      "phone": "+1 555 0110",
+      "job": "Frontend Engineer",
+      "stage": "Interview",
+      "source": "Careers page",
+      "appliedOn": "2026-10-03"
+    },
+    {
+      "id": 11,
+      "firstName": "Hana",
+      "lastName": "Sato",
+      "email": "hana.sato@example.com",
+      "phone": "+1 555 0111",
+      "job": "Backend Engineer",
+      "stage": "Offer",
+      "source": "Job board",
+      "appliedOn": "2026-10-06"
+    },
+    {
+      "id": 12,
+      "firstName": "Elif",
+      "lastName": "Kaya",
+      "email": "elif.kaya@example.com",
+      "phone": "+1 555 0112",
+      "job": "Product Designer",
+      "stage": "Applied",
+      "source": "LinkedIn",
+      "appliedOn": "2026-10-09"
+    },
+    {
+      "id": 13,
+      "firstName": "Noah",
+      "lastName": "Fischer",
+      "email": "noah.fischer@example.com",
+      "phone": "+1 555 0113",
+      "job": "Data Analyst",
+      "stage": "Screening",
+      "source": "Referral",
+      "appliedOn": "2026-10-12"
+    },
+    {
+      "id": 14,
+      "firstName": "Amara",
+      "lastName": "Okafor",
+      "email": "amara.okafor@example.com",
+      "phone": "+1 555 0114",
+      "job": "Customer Success Lead",
+      "stage": "Interview",
+      "source": "Careers page",
+      "appliedOn": "2026-10-15"
+    },
+    {
+      "id": 15,
+      "firstName": "Liam",
+      "lastName": "Byrne",
+      "email": "liam.byrne@example.com",
+      "phone": "+1 555 0115",
+      "job": "Frontend Engineer",
+      "stage": "Offer",
+      "source": "Job board",
+      "appliedOn": "2026-10-18"
+    },
+    {
+      "id": 16,
+      "firstName": "Zara",
+      "lastName": "Haddad",
+      "email": "zara.haddad@example.com",
+      "phone": "+1 555 0116",
+      "job": "Backend Engineer",
+      "stage": "Applied",
+      "source": "LinkedIn",
+      "appliedOn": "2026-10-21"
+    }
+  ]
+}

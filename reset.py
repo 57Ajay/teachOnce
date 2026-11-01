@@ -1,4 +1,5 @@
-"""Reset the demo: the portal back to the original site, no runs, and every workflow back to how it was taught.
+"""Reset the demo: the portal back to the original site, the test site's data back to its seed, no runs, and every
+workflow back to how it was taught.
 
 Usage: uv run reset.py
 Recordings, compiled workflows, exported scripts and the baseline/benchmark summaries are kept.
@@ -24,6 +25,11 @@ def reset():
         print("portal: original site (level 0), switches off")
     except httpx.HTTPError:
         print(f"portal: not reachable at {config.PORTAL_URL}; it starts at level 0 anyway")
+    try:
+        r = httpx.post(f"{config.TEST_SITE_URL}/api/reset", timeout=5).raise_for_status().json()
+        print(f"test site: {r['candidates']} candidates, no interviews")
+    except httpx.HTTPError:
+        print(f"test site: not running at {config.TEST_SITE_URL}; it starts from its seed data anyway")
     runs = sorted(config.RUNS_DIR.glob("*/")) if config.RUNS_DIR.exists() else []
     for path in runs + [config.DATA_DIR / "bench", workflow.WORKFLOWS_DIR / "diffs"]:
         shutil.rmtree(path, ignore_errors=True)

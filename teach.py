@@ -34,11 +34,15 @@ def on_portal(url: str) -> bool:
 
 def password_env(url: str) -> str:
     """Where a password typed while teaching comes from at run time: PORTAL_PASSWORD, or one per site
-    (https://opensource-demo.orangehrmlive.com -> ORANGEHRMLIVE_PASSWORD)."""
+    (https://opensource-demo.orangehrmlive.com -> ORANGEHRMLIVE_PASSWORD, http://localhost:3000 -> LOCALHOST_3000_PASSWORD)."""
     if on_portal(url):
         return "PORTAL_PASSWORD"
-    labels = urlsplit(url).hostname.split(".")
-    name = labels[-2] if len(labels) > 1 and labels[-1].isalpha() else "_".join(labels)
+    u = urlsplit(url)
+    labels = u.hostname.split(".")
+    if len(labels) > 1 and labels[-1].isalpha():
+        name = labels[-2]
+    else:  # localhost or an IP address: several sites can share it, so the port is part of the name
+        name = "_".join(labels + ([str(u.port)] if u.port else []))
     return re.sub(r"\W", "_", name).upper() + "_PASSWORD"
 
 
