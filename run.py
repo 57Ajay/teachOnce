@@ -26,6 +26,7 @@ VIEWPORT = {"width": 1280, "height": 800}
 READ_VALUE_JS = """e => e.tagName === 'SELECT' ? (e.options[e.selectedIndex]?.text ?? '')
   : ['INPUT', 'TEXTAREA'].includes(e.tagName) ? e.value : e.innerText.trim()"""  # custom dropdowns show their value
 POLL_MS = 150
+LIVE_SHOT_S = 0.7  # the dashboard's live screen: a screenshot at most this often, so watching costs little time
 OPTIONAL_WAIT_MS = 1500  # an optional step (a field the site may have dropped, a Next button) is skipped quickly
 IN_LABEL_JS = "e => ['checkbox', 'radio'].includes(e.type) && !!e.closest('label')"
 DATE_PATTERN = re.compile(r"(DD|MM|YYYY)([-/. ])(DD|MM|YYYY)\2(DD|MM|YYYY)")
@@ -189,7 +190,11 @@ def execute(ctx: RowContext, step: Step):
                 el.fill(value, timeout=t)
             case "select" if el.evaluate("e => e.tagName") != "SELECT":  # a button that opens a list
                 el.click(timeout=t)
-                page.get_by_role("option", name=value, exact=True).click(timeout=t)
+                try:
+                    page.get_by_role("option", name=value, exact=True).click(timeout=t)
+                except PlaywrightError as e:
+                    offered = [o.strip() for o in page.get_by_role("option").all_inner_texts()][:12]
+                    raise StepFailed("action_failed", f"the list has no option {value!r} (it offers: {offered})") from e
             case "select":
                 el.select_option(label=value, timeout=t)
             case "check" | "uncheck" if el.evaluate(IN_LABEL_JS):  # styled boxes are often covered by their label's art
@@ -230,9 +235,14 @@ def run_row(browser, wf: Workflow, row_idx: int, row: dict, run_dir: Path, emit,
     status, error, heals = "ok", None, 0
     emit("row_start", row=row_idx, workflow=f"{wf.id}.v{wf.version}")
 
-    def shoot(step_id):
-        rel = f"steps/{row_idx:03d}_{step_id}.png"
-        return rel if screenshot(ctx.page, path=run_dir / rel) else None
+    last_shot = 0.0
+
+    def shoot(step_id, live=False):
+        nonlocal last_shot
+        last_shot = time.monotonic()
+        rel = f"steps/{row_idx:03d}_{step_id}.{'jpg' if live else 'png'}"
+        kw = {"type": "jpeg", "quality": 60} if live else {}
+        return rel if screenshot(ctx.page, path=run_dir / rel, **kw) else None
 
     i = 0
     while i < len(wf.steps):
@@ -254,7 +264,11 @@ def run_row(browser, wf: Workflow, row_idx: int, row: dict, run_dir: Path, emit,
             wf, heals = healed, heals + 1
             ctx.interrupts = wf.interrupts
         last = i == len(wf.steps) - 1
-        emit("step_ok", row=row_idx, step=step.id, screenshot=shoot(step.id) if shoot_all or last else None)
+        if shoot_all or last:
+            shot = shoot(step.id)
+        else:
+            shot = shoot(step.id, live=True) if time.monotonic() - last_shot >= LIVE_SHOT_S else None
+        emit("step_ok", row=row_idx, step=step.id, screenshot=shot)
         i += 1
     context.close()
 
