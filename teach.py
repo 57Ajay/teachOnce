@@ -128,7 +128,7 @@ def dry_run(wf: workflow.Workflow, rec_dir, attempt: int, csv_rows: list[dict], 
     if portal:
         httpx.post(f"{config.PORTAL_URL}/portal/admin/drift", json={"level": 0}).raise_for_status()
     run_id = f"dryrun_{rec_dir.name}_{attempt}"
-    summary = run.run(draft, examples, run_id=run_id)
+    summary = run.run(draft, examples, run_id=run_id, heal=False)  # test the workflow as compiled, never pay for heals
     if summary["failed"] == 0:
         return None
     results = [json.loads(line) for line in (config.RUNS_DIR / run_id / "results.jsonl").read_text().splitlines()]
