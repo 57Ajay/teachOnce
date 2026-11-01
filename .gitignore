@@ -13,3 +13,4 @@ data/
 *.md
 !README.md
 !DOCS.md
+node_modules/
