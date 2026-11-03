@@ -1,7 +1,8 @@
 import { useEffect, useId, useState } from "react";
 import { api, ApiError, type Candidate, type Meta } from "./api";
+import { redesign, t } from "./redesign";
 import { Link, useRouter } from "./router";
-import { Avatar, Dialog, Field, formatDate, fullName, Icon, Menu, StageBadge, useToast } from "./ui";
+import { Avatar, Dialog, Field, formatDate, fullName, Icon, Menu, Select, StageBadge, useToast } from "./ui";
 
 function useRemove() {
   const { navigate } = useRouter();
@@ -22,13 +23,13 @@ function useRemove() {
     }
   };
   const dialog = target && (
-    <Dialog title={`Remove ${fullName(target)}?`} onClose={() => setTarget(null)}>
+    <Dialog title={`${t("Remove", "Delete")} ${fullName(target)}?`} onClose={() => setTarget(null)}>
       <p className="muted">
         Their application for {target.job} and any scheduled interviews will be deleted. This can't be undone.
       </p>
       <div className="dialog-actions">
-        <button type="button" className="button" onClick={() => setTarget(null)}>Cancel</button>
-        <button type="button" className="button danger" disabled={busy} onClick={confirm}>Yes, remove</button>
+        <button type="button" className="button" onClick={() => setTarget(null)}>{t("Cancel", "Keep")}</button>
+        <button type="button" className="button danger" disabled={busy} onClick={confirm}>{t("Yes, remove", "Yes, delete")}</button>
       </div>
     </Dialog>
   );
@@ -56,10 +57,10 @@ export function CandidatesPage() {
     <>
       <div className="page-head">
         <div>
-          <h1>Candidates</h1>
+          <h1>{t("Candidates", "Talent pool")}</h1>
           <p className="muted">{all ? `${all.length} people in your pipeline` : "Loading…"}</p>
         </div>
-        <Link to="/candidates/new" className="button primary"><Icon name="plus" size={16} />Add candidate</Link>
+        <Link to="/candidates/new" className="button primary"><Icon name="plus" size={16} />{t("Add candidate", "New candidate")}</Link>
       </div>
       {removed && (
         <div className="banner" role="status">
@@ -74,7 +75,8 @@ export function CandidatesPage() {
         <div className="toolbar">
           <div className="search">
             <Icon name="search" size={16} />
-            <input type="search" aria-label="Search candidates" placeholder="Search by name, email or role"
+            <input type="search" aria-label={t("Search candidates", "Find people")}
+              placeholder={t("Search by name, email or role", "Type a name, email or role…")}
               value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           <div className="chips" role="group" aria-label="Filter by stage">
@@ -104,10 +106,10 @@ export function CandidatesPage() {
                 <td><StageBadge stage={c.stage} /></td>
                 <td className="muted">{formatDate(c.appliedOn)}</td>
                 <td className="cell-actions">
-                  <Menu label="Actions" items={[
-                    { label: "View profile", icon: "eye", onSelect: () => navigate(`/profile/${c.id}`) },
-                    { label: "Schedule interview", icon: "calendar", onSelect: () => navigate(`/schedule/${c.id}`) },
-                    { label: "Remove candidate", icon: "trash", danger: true, onSelect: () => remove.ask(c) },
+                  <Menu label={t("Actions", "More options")} items={[
+                    { label: t("View profile", "Open profile"), icon: "eye", onSelect: () => navigate(`/profile/${c.id}`) },
+                    { label: t("Schedule interview", "Book interview"), icon: "calendar", onSelect: () => navigate(`/schedule/${c.id}`) },
+                    { label: t("Remove candidate", "Delete candidate"), icon: "trash", danger: true, onSelect: () => remove.ask(c) },
                   ]} />
                 </td>
               </tr>
@@ -156,39 +158,45 @@ export function NewCandidatePage() {
     <>
       <div className="page-head">
         <div>
-          <Link to="/candidates" className="back">← Candidates</Link>
-          <h1>Add candidate</h1>
+          <Link to="/candidates" className="back">{t("← Candidates", "← Talent pool")}</Link>
+          <h1>{t("Add candidate", "New candidate")}</h1>
           <p className="muted">They'll start in the Applied stage.</p>
         </div>
       </div>
       <form className="card form" onSubmit={submit} noValidate>
         <section>
-          <h2>Personal details</h2>
+          <h2>{t("Personal details", "Who is it?")}</h2>
           <div className="form-grid">
-            <Field id={`${id}-first`} label="First name" error={errors.firstName}>
-              <input id={`${id}-first`} placeholder="Ada" value={form.firstName} onChange={set("firstName")} />
+            <Field id={`${id}-first`} label={t("First name", "Given name")} error={errors.firstName}>
+              <input id={`${id}-first`} placeholder={t("Ada", "e.g. Grace")} value={form.firstName} onChange={set("firstName")} />
             </Field>
-            <Field id={`${id}-last`} label="Last name" error={errors.lastName}>
-              <input id={`${id}-last`} placeholder="Lovelace" value={form.lastName} onChange={set("lastName")} />
+            <Field id={`${id}-last`} label={t("Last name", "Family name")} error={errors.lastName}>
+              <input id={`${id}-last`} placeholder={t("Lovelace", "e.g. Hopper")} value={form.lastName} onChange={set("lastName")} />
             </Field>
             <Field id={`${id}-email`} label="Email" error={errors.email}>
               <input id={`${id}-email`} type="email" placeholder="ada@example.com" value={form.email} onChange={set("email")} />
             </Field>
-            <Field id={`${id}-phone`} label="Phone" hint="Optional">
-              <input id={`${id}-phone`} type="tel" placeholder="+1 555 0100" value={form.phone} onChange={set("phone")} />
+            <Field id={`${id}-phone`} label={t("Phone", "Mobile number")} hint="Optional">
+              <input id={`${id}-phone`} type="tel" placeholder={t("+1 555 0100", "+1 (555) 000-0000")} value={form.phone}
+                onChange={set("phone")} />
             </Field>
           </div>
         </section>
         <section>
-          <h2>Application</h2>
+          <h2>{t("Application", "Which role?")}</h2>
           <div className="form-grid">
-            <Field id={`${id}-job`} label="Job opening" error={errors.job}>
-              <select id={`${id}-job`} value={form.job} onChange={set("job")}>
-                <option value="">Choose a role</option>
-                {meta?.jobs.map((j) => <option key={j}>{j}</option>)}
-              </select>
-            </Field>
-            <Field id={`${id}-source`} label="Source">
+            {redesign ? (
+              <Select label="Applying for" placeholder="Pick a role" options={meta?.jobs ?? []} value={form.job} avatars={false}
+                onChange={(v) => setForm({ ...form, job: v })} error={errors.job} />
+            ) : (
+              <Field id={`${id}-job`} label="Job opening" error={errors.job}>
+                <select id={`${id}-job`} value={form.job} onChange={set("job")}>
+                  <option value="">Choose a role</option>
+                  {meta?.jobs.map((j) => <option key={j}>{j}</option>)}
+                </select>
+              </Field>
+            )}
+            <Field id={`${id}-source`} label={t("Source", "How did they find us?")}>
               <select id={`${id}-source`} value={form.source} onChange={set("source")}>
                 {meta?.sources.map((s) => <option key={s}>{s}</option>)}
               </select>
@@ -198,7 +206,7 @@ export function NewCandidatePage() {
         {errors.form && <p className="form-error" role="alert">{errors.form}</p>}
         <div className="form-actions">
           <Link to="/candidates" className="button">Cancel</Link>
-          <button type="submit" className="button primary" disabled={busy}>{busy ? "Saving…" : "Save candidate"}</button>
+          <button type="submit" className="button primary" disabled={busy}>{busy ? "Saving…" : t("Save candidate", "Create candidate")}</button>
         </div>
       </form>
     </>
@@ -232,9 +240,9 @@ export function ProfilePage({ id }: { id: number }) {
           </div>
         </div>
         <div className="profile-actions">
-          <button type="button" className="button" onClick={() => remove.ask(c)}><Icon name="trash" size={16} />Remove</button>
+          <button type="button" className="button" onClick={() => remove.ask(c)}><Icon name="trash" size={16} />{t("Remove", "Delete")}</button>
           <button type="button" className="button primary" onClick={() => navigate(`/schedule/${c.id}`)}>
-            <Icon name="calendar" size={16} />Schedule interview
+            <Icon name="calendar" size={16} />{t("Schedule interview", "Book interview")}
           </button>
         </div>
       </div>

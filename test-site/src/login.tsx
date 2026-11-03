@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { api, ApiError } from "./api";
 import { useAuth } from "./auth";
+import { t } from "./redesign";
 import { useRouter } from "./router";
 import { Icon } from "./ui";
 
@@ -48,11 +49,11 @@ export function LoginPage() {
             <span className="brand-mark" aria-hidden="true">H</span>
             <span>Demoland Hire</span>
           </div>
-          <h1>Welcome back</h1>
-          <p className="muted">Sign in to your recruiting workspace.</p>
+          <h1>{t("Welcome back", "Log in to Demoland Hire")}</h1>
+          <p className="muted">{t("Sign in to your recruiting workspace.", "Your hiring, all in one place.")}</p>
           <div className="field">
-            <label htmlFor={emailId}>Work email</label>
-            <input id={emailId} type="email" placeholder="you@company.com" autoComplete="username" value={email}
+            <label htmlFor={emailId}>{t("Work email", "Email address")}</label>
+            <input id={emailId} type="email" placeholder={t("you@company.com", "name@work.com")} autoComplete="username" value={email}
               onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="field">
@@ -61,7 +62,7 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)} />
           </div>
           {error && <p className="form-error" role="alert"><Icon name="x" size={16} />{error}</p>}
-          <button type="submit" className="button primary wide" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+          <button type="submit" className="button primary wide" disabled={busy}>{busy ? t("Signing in…", "Logging in…") : t("Sign in", "Log in")}</button>
           <div className="demo-login">
             <strong>Demo login</strong>
             <code>recruiter@demoland.test</code>

@@ -37,4 +37,5 @@ export const api = {
   interview: (id: string) => call<Interview>(`/interviews/${id}`),
   schedule: (iv: Partial<Interview>) => post<Interview>("/interviews", iv),
   reset: () => post<{ ok: true; candidates: number }>("/reset", {}),
+  setRedesign: (on: boolean) => post<{ on: boolean }>("/redesign", { on }),
 };

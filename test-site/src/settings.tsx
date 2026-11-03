@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Candidate } from "./api";
+import { redesign } from "./redesign";
 import { Icon, useToast } from "./ui";
 
 const LOCATIONS = ["Remote · EU", "Berlin", "Remote · US", "Lisbon", "Remote · APAC"];
@@ -43,7 +44,12 @@ export function SettingsPage() {
     setBusy(true);
     const r = await api.reset();
     setBusy(false);
-    toast(`Demo data reset: ${r.candidates} candidates, no interviews`);
+    if (redesign) location.reload(); // the reset also switches the redesign off
+    else toast(`Demo data reset: ${r.candidates} candidates, no interviews`);
+  }
+  async function switchDesign(on: boolean) {
+    await api.setRedesign(on);
+    location.reload();
   }
   return (
     <>
@@ -62,6 +68,19 @@ export function SettingsPage() {
             <tr><th>Data</th><td>Fake candidates, kept in memory; restarting the server also resets it.</td></tr>
           </tbody>
         </table>
+      </section>
+      <section className="card">
+        <h2>Redesign (demo)</h2>
+        <p className="muted">
+          Ship a redesign to see how automations cope: a new look, a cookie banner, a renamed menu, reworded labels and
+          buttons, and new controls. Resetting the demo data switches it off.
+        </p>
+        <label className="switch-row">
+          <input type="checkbox" role="switch" className="sr-only" checked={redesign}
+            onChange={(e) => switchDesign(e.target.checked)} />
+          <span className="switch" aria-hidden="true" />
+          <span>New design</span>
+        </label>
       </section>
       <section className="card danger-zone">
         <h2>Reset demo data</h2>

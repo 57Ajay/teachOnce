@@ -61,8 +61,9 @@ export function Field({ label, error, hint, children, id }: {
   );
 }
 
-export function Select({ label, value, options, placeholder, onChange, error }: {
+export function Select({ label, value, options, placeholder, onChange, error, avatars = true }: {
   label: string; value: string; options: string[]; placeholder: string; onChange: (v: string) => void; error?: string;
+  avatars?: boolean;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -97,7 +98,7 @@ export function Select({ label, value, options, placeholder, onChange, error }: 
             {options.map((o, i) => (
               <li key={o} role="option" aria-selected={o === value} className={i === active ? "active" : ""}
                 onMouseEnter={() => setActive(i)} onClick={() => pick(o)}>
-                <span className="select-option-avatar"><Avatar name={o} size={22} /></span>
+                {avatars && <span className="select-option-avatar"><Avatar name={o} size={22} /></span>}
                 {o}
                 {o === value && <Icon name="check" size={16} />}
               </li>

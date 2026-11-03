@@ -6,14 +6,16 @@ import { DashboardPage } from "./dashboard";
 import { LoginPage } from "./login";
 import { Link, match, RouterProvider, useRouter } from "./router";
 import { InterviewPage, InterviewsPage, SchedulePage } from "./schedule";
+import { ConsentBanner } from "./consent";
+import { loadRedesign, t } from "./redesign";
 import { JobsPage, SettingsPage } from "./settings";
 import { Avatar, Icon, ToastProvider } from "./ui";
 
-const NAV = [
-  { to: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { to: "/candidates", label: "Candidates", icon: "users" },
-  { to: "/interviews", label: "Interviews", icon: "calendar" },
-  { to: "/jobs", label: "Jobs", icon: "briefcase" },
+const nav = () => [
+  { to: "/dashboard", label: t("Dashboard", "Home"), icon: "dashboard" },
+  { to: "/candidates", label: t("Candidates", "Talent pool"), icon: "users" },
+  { to: "/interviews", label: t("Interviews", "Calendar"), icon: "calendar" },
+  { to: "/jobs", label: t("Jobs", "Open roles"), icon: "briefcase" },
   { to: "/settings", label: "Settings", icon: "settings" },
 ];
 
@@ -47,7 +49,7 @@ function Shell() {
           <span>Demoland Hire</span>
         </div>
         <nav aria-label="Main">
-          {NAV.map((n) => (
+          {nav().map((n) => (
             <Link key={n.to} to={n.to} className={`nav-link${path.startsWith(n.to) ? " active" : ""}`}>
               <Icon name={n.icon} />
               {n.label}
@@ -64,7 +66,7 @@ function Shell() {
       </aside>
       <div className="main">
         <header className="topbar">
-          <div className="topbar-title">Talent workspace</div>
+          <div className="topbar-title">{t("Talent workspace", "Demoland Hire · new experience")}</div>
           <div className="topbar-user">
             <Avatar name={user.name} size={30} />
             <div>
@@ -91,12 +93,15 @@ function NotFound() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(
-  <RouterProvider>
-    <AuthProvider>
-      <ToastProvider>
-        <Shell />
-      </ToastProvider>
-    </AuthProvider>
-  </RouterProvider>,
+loadRedesign().then(() =>
+  createRoot(document.getElementById("root")!).render(
+    <RouterProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <Shell />
+          <ConsentBanner />
+        </ToastProvider>
+      </AuthProvider>
+    </RouterProvider>,
+  ),
 );
