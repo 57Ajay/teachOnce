@@ -242,10 +242,14 @@ class Healer:
             new_wf.interrupts.append(interrupt)
             ctx.interrupts = new_wf.interrupts
             step = new_wf.steps[i]
-            if failure.kind == "check_failed":
-                verify(ctx, step, None, workflow.render(step.value, ctx.values) if step.value else None)
-            else:
-                execute(ctx, step)
+            try:
+                if failure.kind == "check_failed":
+                    verify(ctx, step, None, workflow.render(step.value, ctx.values) if step.value else None)
+                else:
+                    execute(ctx, step)
+            except StepFailed as e:
+                e.partial = new_wf  # the step behind the banner changed too: keep the interrupt for the next attempt
+                raise
             return new_wf, {"summary": f"cleared interruption ({it['explanation']}) via {path}",
                             "interrupt": interrupt.model_dump(exclude_defaults=True), "path": path}
 
@@ -271,11 +275,15 @@ class Healer:
                                               detections.get(entry["noun_phrase"]))
                 if not desc:
                     continue
+                locs = locators_from(desc, variables)
+                prev = new_wf.steps[new_wf.steps.index(step) - 1]
+                if prev.action == "click" and prev.target and any(loc in prev.target.locators for loc in locs):
+                    continue  # the workflow already clicks it right before this step (a wizard's Continue)
                 openers[step.id] = Step(
                     id=f"{step.id}_open", intent=f"Reveal the next part of the form ({entry['explanation']})",
                     action="click", optional=True,
                     target=Target(description=entry["explanation"], noun_phrase=entry["noun_phrase"],
-                                  locators=locators_from(desc, variables), anchor=Anchor(bbox=desc["bbox"])))
+                                  locators=locs, anchor=Anchor(bbox=desc["bbox"])))
                 marks.append(self.mark(desc, det, f"{step.id}: click first ({path})"))
             elif entry["situation"] == "split_into_parts":
                 remember(step)

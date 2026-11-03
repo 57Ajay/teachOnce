@@ -150,3 +150,21 @@ def test_runner_handles_unlinked_labels_custom_dropdowns_and_styled_checkboxes()
             page.evaluate("document.querySelector('[role=option]').textContent = 'Software Engineer (old)'")
             run.execute(ctx, step("select", "Vacancy", "Software Engineer"))
         browser.close()
+
+
+def test_a_placeholder_locator_matches_the_whole_placeholder_only():
+    from playwright.sync_api import sync_playwright
+
+    from workflow import Locator, Step, Target
+
+    # A redesign renamed "First name"; the recorded placeholder "Ada" must not land in the email box ("ada@example.com").
+    step = Step(id="s", intent="", action="fill", value="Nora", check={"kind": "value_equals"},
+                target=Target(locators=[Locator(kind="label", text="First name"), Locator(kind="placeholder", text="Ada")]))
+    with sync_playwright() as p:
+        browser = p.chromium.launch(executable_path=config.CHROMIUM_PATH)
+        page = browser.new_page()
+        page.set_content('<label>Email<input placeholder="ada@example.com"></label><label>Given name<input placeholder="e.g. Grace"></label>')
+        with pytest.raises(run.StepFailed, match="no locator matched"):  # a clean failure the healer can fix
+            run.execute(run.RowContext(page, {}, set(), []), step)
+        assert page.locator("input").first.input_value() == ""
+        browser.close()
