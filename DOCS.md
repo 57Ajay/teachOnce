@@ -65,7 +65,7 @@ The server reads fields through the same rename map, and each form posts the lay
 
 A workflow (`<id>.v<N>.json`) is a list of steps. Each step has an `action` (`goto`, `click`, `fill`, `fill_date`, `select`, `check`, `uncheck`, `press`, `wait_for`, `extract`, `assert_text`), an optional `target`, a templated `value`, and a `check` that proves it worked (`value_equals`, `url_contains`, `text_visible`, `element_visible`, `element_hidden`). Values and locator text can use `{{variable}}` (CSV columns), `{{secret}}` (env vars) and `{{PORTAL_URL}}`.
 
-A target carries a **locator chain**, most robust first (role + accessible name, label, placeholder, text, CSS). The runner polls the chain until one locator matches exactly one visible, enabled element. That is why cosmetic drift (renamed ids) often needs no heal: the role/label locators still match.
+A target carries a **locator chain**, most robust first (role + accessible name, label, placeholder, text, CSS). The runner polls the chain until one locator matches exactly one visible, enabled element. That is why cosmetic drift (renamed ids) often needs no heal: the role/label locators still match. Role names and labels match as substrings (accessible names include the " *" required marker); placeholders match only as a whole, because a short one is often part of another field's ("Ada" is in "ada@example.com"), and a fallback that quietly fills the wrong field is worse than a failure the healer can fix.
 
 `uv run run.py examples/pay-interstate-tax.v1.json data/rows.csv [--start N] [--limit N] [--headed] [--no-heal]`
 
@@ -133,7 +133,7 @@ bun run serve    # production mode (bundled once)
 bun run check    # type check
 ```
 
-Login `recruiter@demoland.test` / `hire-demo-2026` (shown on the login page; `LOCALHOST_3000_PASSWORD` in `.env`). **Reset** puts the seed data back and deletes every interview: Settings → Reset demo data, `POST /api/reset`, or `uv run reset.py` (which also resets the portal and deletes runs). Restarting the server resets too.
+Login `recruiter@demoland.test` / `hire-demo-2026` (shown on the login page; `LOCALHOST_3000_PASSWORD` in `.env`). **Reset** puts the seed data back, deletes every interview and switches the redesign off (below): Settings → Reset demo data, `POST /api/reset`, or `uv run reset.py` (which also resets the portal and deletes runs). Restarting the server resets too.
 
 Pages: login, dashboard (stats, pipeline, upcoming interviews), candidates (search, stage filters, a row menu per candidate), add candidate (validated form, duplicate email rejected), profile (tabs), a three-step interview wizard, interview confirmation, interviews, jobs, settings. Client-side routing with `history.pushState` (no full page loads after login); the recorder sees these navigations through Playwright's `framenavigated`.
 
@@ -158,6 +158,45 @@ Measured (Nov 1; recordings driven by a script in the headless sandbox through `
 Afterwards the API showed 18 candidates (16 + 8 − 6) and 8 interviews whose values match the CSV rows.
 
 Design choices that matter for automation, all of them normal on modern sites: labels are linked to their fields; ids React generates from render order (`useId`, e.g. `_r_1_`) are not used as locators (only hand-written `#id` selectors are), so steps are found by role, label and placeholder; icons and avatar initials are `aria-hidden`, and `describe.js` leaves aria-hidden text out of accessible names like the browser does (an option reads "Priya Raman", not "PR Priya Raman"); every task ends on a URL the previous page doesn't contain (`/profile/17`, `/candidates?removed=…`, `/interviews/IV-1042`), so the last URL check waits for the save.
+
+### Redesign switch
+
+Demoland Hire can ship a fixed redesign, so self-healing can be shown on a modern React app too: Settings → **New design**, the **Hire redesign** button in the Teach-Once header, or `POST /api/redesign {"on": true}` (`GET` reads it). `POST /api/reset`, Settings → Reset demo data and `uv run reset.py` switch it off. Runs and compile dry runs reset the data with `/api/reset?keep_redesign=1`, so a run started on the redesign stays on it. The app reads the switch once per page load (`src/redesign.ts`), like a deploy that new sessions pick up: a row already on the page finishes on the design it started with, the next row (a fresh browser) gets the new one. Off renders exactly what the site rendered before; we compared screenshots of every page against `main` and only Settings differs (it has the switch).
+
+What the redesign changes, in the spirit of the portal's level 3:
+
+- a new look (teal theme, dark sidebar, square corners);
+- a **cookie banner** covering every page until the visitor chooses ("Accept all cookies" / "Only necessary"); every row is a new visitor, so it shows on every row;
+- the menu: Candidates → **Talent pool** (also Dashboard → Home, Interviews → Calendar, Jobs → Open roles);
+- login: "Work email" → "Email address", **Sign in → Log in**, new placeholder;
+- candidates list: Add candidate → **New candidate**, the search box is now "Find people", the row menu "Actions" → **More options** with Open profile / **Book interview** / **Delete candidate**, and the confirm button **Yes, remove → Yes, delete**;
+- profile: **Remove → Delete**, Schedule interview → **Book interview**;
+- add form: First/Last name → **Given/Family name**, Phone → **Mobile number** (all with new placeholders), the job opening is a **custom dropdown** ("Applying for") instead of a native select, Save candidate → **Create candidate**;
+- wizard: the interviewer **custom dropdown becomes radio cards** ("Who's interviewing?"), the invite switch is reworded, the stepper reads When / Who / Check;
+- confirmation: "Interview scheduled" → "Interview booked", and the extracted **Interview ID** row is now **Booking reference**.
+
+The URLs, the Email field's label, the date/time/duration controls on the wizard's first step and the "Confirm interview" button stay as they were.
+
+Left out on purpose: moving a field to another wizard step, or reordering the steps. The wizard keeps one URL, so all its steps are one "page" for the healer, and both buttons that move between steps are named Continue. A heal that reorders that page would put the second Continue next to the first. We saw this in the code before shipping it and didn't chase it (see Limitations in the README).
+
+Measured (Nov 3; the tasks taught by a script in the headless sandbox through `teach_live.py`'s browser, no narration; compiled first try: add 73 s $0.21, remove 57 s $0.14, schedule 83 s $0.23; remove via the profile 45 s $0.15 on the second compile, the first failed its dry run waiting for the profile's Remove button and wasn't investigated further). Each run starts on the original design; the redesign is switched on after row 2, so row 3 (index 2) is the first on the new design:
+
+| Task | Rows OK | Heals (all on the first redesigned row) | Model calls | Heal cost | Run time | Rows after the heal |
+|---|---|---|---|---|---|---|
+| Add a candidate | **8/8** | 4: login + cookie banner, menu, New candidate, the form (3 text fields, the job opening now a custom dropdown, Create; Email kept its label) | 13 | $0.064 | 101 s (row 3: 85 s) | 1.7–2.1 s |
+| Remove a candidate | **6/6** | 5: login + cookie banner, menu, search box + More options, Delete candidate, Yes, delete | 14 | $0.078 | 137 s (row 3: 124 s) | 2.0–2.1 s |
+| Remove via the profile (search part of the name, click it, Remove on the profile) | **6/6** | 5: login + cookie banner, menu, search box, Delete on the profile, Yes, delete | 13 | $0.084 | 158 s (row 3: 147 s) | 1.6–2.1 s |
+| Schedule an interview | **8/8** | 6: login + cookie banner, menu, search + More options, Book interview, interviewer dropdown → radio cards + invite switch, Booking reference | 18 | $0.108 | 191 s (row 3: 173 s) | 1.9–2.4 s, IV-1042…IV-1049 extracted |
+
+28/28 rows, 20 heals, 58 model calls, $0.33 in heals. The data was checked through the API after the runs (24 candidates with the CSV's names, phones and jobs; the six removed people gone; eight interviews with the CSV's type, date, time, duration, interviewer and the invite on; the interview check is from the schedule run before fix 3, which wrote the same data). The healed versions then ran every row again on both designs, with 0 heals and 0 model calls: the old locators stay as fallbacks and the dropdown shape of the interviewer step is kept as a variant.
+
+What failed on the way, and the fixes (in the healer, not the site):
+
+1. **A fallback filled the wrong field.** The first add run went 2/8: on the new form the first-name step's role and label locators failed, but its placeholder "Ada" matched the Email box ("ada@example.com") as a substring, so no heal was asked for, the first name went into Email (then overwritten by the email), and every save failed on "This field is required". A heal at the Save step can't see a mistake made three steps earlier ($0.12 spent). Fix: placeholders match whole (above).
+2. **The cookie banner was paid for twice.** The first heal attempt dismissed the banner, then found the login field renamed too; the second attempt fixed the field, but the learned interrupt was dropped with the first attempt, so the next row needed another heal. Fix: an interrupt learned in a failed attempt is kept for the next one.
+3. **An extra wizard click.** On wizard step 2, Spark (correctly) reported "Confirm interview" as behind a click (Continue), and the healer inserted an optional Continue click right after the workflow's own Continue. Rows still passed, but that optional click waited 1.5 s on every row (rows took 3.6–4.3 s instead of ~2 s). Fix: no reveal click is inserted when the step right before already clicks the same button.
+
+These results are from one run per task after the fixes (the first add run and the first schedule run were before them).
 
 ## Teach pipeline (recording → workflow)
 
@@ -235,7 +274,7 @@ Everything in the demo happens in the browser at `http://localhost:8000/app/`:
 
 1. **Teach** (`/app/teach/new`) and **Compile** (`/app/teach/<rec_id>`), as above. A compiled recording gets a **▶ Run 50 rows** button.
 2. **Run** from the home page: pick any workflow (compiled, healed or a sample), the number of rows and whether to heal. Rows come from `data/rows.csv`, generated with fake data if missing. One run at a time.
-3. **Portal redesign** in the header changes the demo portal live, also in the middle of a run: levels **0-3**, **🎲 Random** (a new random redesign on every press; hover it to see what changed), **+ required field** and **Block bots** (the two cases that must stop for a person).
+3. **Portal redesign** in the header changes the demo portal live, also in the middle of a run: levels **0-3**, **🎲 Random** (a new random redesign on every press; hover it to see what changed), **+ required field** and **Block bots** (the two cases that must stop for a person). **Hire redesign** switches Demoland Hire's redesign on and off the same way (the app relays it to the test site, `GET`/`POST /app/api/hire-redesign`; the button is greyed out when the site isn't running).
 
 The run page (`/app/runs/<run_id>`) follows the run live:
 

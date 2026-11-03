@@ -292,13 +292,13 @@ def run_row(browser, wf: Workflow, row_idx: int, row: dict, run_dir: Path, emit,
 
 def reset_test_site(start_url: str) -> bool:
     """Demoland Hire (test-site/) gets its seed data back before every run and compile dry run, so tasks that add or
-    remove candidates always start from the same 16 people."""
+    remove candidates always start from the same 16 people. Its redesign switch stays as it is."""
     site, test = urlsplit(start_url), urlsplit(config.TEST_SITE_URL)
     local = {"localhost", "127.0.0.1"}
     if site.port != test.port or site.hostname not in local or test.hostname not in local:
         return False
     try:
-        httpx.post(f"{config.TEST_SITE_URL}/api/reset", timeout=5).raise_for_status()
+        httpx.post(f"{config.TEST_SITE_URL}/api/reset?keep_redesign=1", timeout=5).raise_for_status()
     except httpx.HTTPError as e:
         raise RuntimeError(f"the test site is not running at {config.TEST_SITE_URL} (cd test-site && bun run dev)") from e
     return True

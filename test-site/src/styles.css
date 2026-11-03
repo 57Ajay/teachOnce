@@ -234,3 +234,22 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   .sidebar { display: none; }
   .stats, .grid-2, .jobs, .form-grid, .radio-cards { grid-template-columns: 1fr; }
 }
+
+/* Redesign (Settings → New design): a new look on top of the same layout */
+.v2 { --accent: #0d9488; --accent-soft: #e6fffa; --bg: #f3f6f6; --radius: 6px; }
+.v2 .sidebar { background: #0f2a2a; border-right: 0; }
+.v2 .sidebar .brand { color: #f0fdfa; }
+.v2 .brand-mark { background: linear-gradient(135deg, #2dd4bf, #0d9488); box-shadow: none; border-radius: 50%; }
+.v2 .nav-link { color: #99c9c3; }
+.v2 .nav-link:hover { background: #163b3a; color: #f0fdfa; }
+.v2 .nav-link.active { background: #0d9488; color: white; }
+.v2 .sidebar-card { background: #163b3a; color: #5eead4; }
+.v2 .sidebar-card strong { color: #f0fdfa; }
+.v2 .card, .v2 .button, .v2 input, .v2 select, .v2 textarea, .v2 .select-trigger, .v2 .radio-card { border-radius: 6px; }
+.v2 .button.primary { background: #0d9488; border-color: #0d9488; }
+.v2 .login-art { background: linear-gradient(160deg, #134e4a, #0d9488); }
+.consent-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, 0.35); display: flex; align-items: flex-end; justify-content: center; padding: 24px; }
+.consent { width: min(720px, 100%); background: var(--panel); border-radius: 12px; padding: 20px 24px; box-shadow: 0 24px 64px rgba(15, 23, 42, 0.3); }
+.consent p { font-size: 14px; line-height: 1.5; }
+.consent-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.v2 .button.primary:hover { background: #0f766e; }

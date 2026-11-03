@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { api, ApiError, type Candidate, type Interview, type Meta } from "./api";
+import { redesign, t } from "./redesign";
 import { Link, useRouter } from "./router";
 import { Avatar, Field, formatDate, fullName, Icon, Select, useToast } from "./ui";
 
@@ -10,7 +11,7 @@ const TYPES = [
 ];
 const DURATIONS = ["30 min", "45 min", "60 min"];
 const TIMES = Array.from({ length: 17 }, (_, i) => `${String(9 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
-const STEPS = ["Details", "Panel", "Review"];
+const steps = () => (redesign ? ["When", "Who", "Check"] : ["Details", "Panel", "Review"]);
 
 function RadioCards({ legend, name, options, value, onChange, error, compact }: {
   legend: string; name: string; options: { value: string; icon?: string }[]; value: string;
@@ -80,7 +81,7 @@ export function SchedulePage({ candidateId }: { candidateId: number }) {
         </div>
       </div>
       <ol className="stepper">
-        {STEPS.map((s, i) => (
+        {steps().map((s, i) => (
           <li key={s} className={i < step ? "done" : i === step ? "current" : ""} aria-current={i === step ? "step" : undefined}>
             <span className="step-dot">{i < step ? <Icon name="check" size={14} /> : i + 1}</span>{s}
           </li>
@@ -108,13 +109,18 @@ export function SchedulePage({ candidateId }: { candidateId: number }) {
         )}
         {step === 1 && (
           <>
-            <Select label="Interviewer" placeholder="Select interviewer" options={meta.interviewers} value={form.interviewer}
-              onChange={(v) => set("interviewer", v)} error={errors.interviewer} />
+            {redesign ? (
+              <RadioCards legend="Who's interviewing?" name="interviewer" options={meta.interviewers.map((p) => ({ value: p }))}
+                value={form.interviewer} onChange={(v) => set("interviewer", v)} error={errors.interviewer} />
+            ) : (
+              <Select label="Interviewer" placeholder="Select interviewer" options={meta.interviewers} value={form.interviewer}
+                onChange={(v) => set("interviewer", v)} error={errors.interviewer} />
+            )}
             <label className="switch-row">
               <input type="checkbox" role="switch" className="sr-only" checked={form.invite}
                 onChange={(e) => set("invite", e.target.checked)} />
               <span className="switch" aria-hidden="true" />
-              <span>Send calendar invite to the candidate</span>
+              <span>{t("Send calendar invite to the candidate", "Email the candidate a calendar invite")}</span>
             </label>
             <Field id={`${id}-notes`} label="Notes for the interviewer" hint="Optional">
               <textarea id={`${id}-notes`} rows={3} placeholder="Focus areas, links, anything useful"
@@ -156,12 +162,12 @@ export function InterviewPage({ id }: { id: string }) {
   return (
     <div className="confirm">
       <div className="confirm-icon"><Icon name="check" size={28} /></div>
-      <h1>Interview scheduled</h1>
+      <h1>{t("Interview scheduled", "Interview booked")}</h1>
       <p className="muted">{iv.invite ? `A calendar invite is on its way to ${iv.candidate}.` : "No invite was sent."}</p>
       <div className="card">
         <table className="details">
           <tbody>
-            <tr><th>Interview ID</th><td><strong>{iv.id}</strong></td></tr>
+            <tr><th>{t("Interview ID", "Booking reference")}</th><td><strong>{iv.id}</strong></td></tr>
             <tr><th>Candidate</th><td>{iv.candidate}</td></tr>
             <tr><th>Type</th><td>{iv.type}</td></tr>
             <tr><th>Date</th><td>{formatDate(iv.date)}</td></tr>

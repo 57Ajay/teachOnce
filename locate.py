@@ -46,8 +46,8 @@ def to_playwright(page: Page, loc: Locator, values: dict) -> PwLocator:
             return page.get_by_role(loc.role, name=r(loc.name)) if loc.name else page.get_by_role(loc.role)
         case "label":
             return by_label(page, r(loc.text))
-        case "placeholder":
-            return page.get_by_placeholder(r(loc.text))
+        case "placeholder":  # whole text: a short one like "Ada" is also part of "ada@example.com"
+            return page.get_by_placeholder(r(loc.text), exact=True)
         case "text":
             return page.get_by_text(r(loc.text))
         case "css":

@@ -41,6 +41,9 @@
     <span style="width:10px"></span>
     <button data-flag="extra_field" title="The form asks for a new mandatory field the rows have no data for">+ required field</button>
     <button data-flag="blocked" title="The portal blocks automated traffic">Block bots</button>
+    <span style="width:18px"></span>
+    <span title="Ship a redesign of Demoland Hire (test-site/), live">Hire redesign</span>
+    <button id="hire-redesign" title="Demoland Hire's redesign: new look, cookie banner, renamed menu, reworded labels and buttons, the job opening as a custom dropdown, the interviewer as radio cards">Off</button>
   </div>
 </header>
 <main>{% block content %}{% endblock %}</main>
@@ -57,6 +60,17 @@
   document.querySelectorAll(".drift [data-flag]").forEach((b) => b.addEventListener("click", () =>
     setDrift({ [b.dataset.flag]: !b.classList.contains("on") })));
   setDrift();
+  const hire = document.getElementById("hire-redesign");
+  async function setHire(on) {
+    const init = on === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on }) };
+    const d = await (await fetch("/app/api/hire-redesign", init)).json();
+    hire.classList.toggle("on", d.on);
+    hire.textContent = d.on ? "On" : "Off";
+    hire.disabled = !d.available;
+    if (!d.available) hire.title = "Demoland Hire is not running (cd test-site && bun run dev)";
+  }
+  hire.addEventListener("click", () => setHire(!hire.classList.contains("on")));
+  setHire();
 </script>
 </body>
 </html>

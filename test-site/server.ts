@@ -12,6 +12,7 @@ let candidates: Candidate[] = [];
 let interviews: Interview[] = [];
 let nextId = 1;
 let nextInterview = 1042;
+let redesign = false;
 
 function reset() {
   candidates = structuredClone(seed.candidates);
@@ -40,7 +41,20 @@ const server = Bun.serve({
         return json({ name: seed.user.name, email });
       },
     },
-    "/api/reset": { POST: () => (reset(), json({ ok: true, candidates: candidates.length })) },
+    "/api/reset": {
+      POST: (req) => {
+        reset();
+        if (!new URL(req.url).searchParams.has("keep_redesign")) redesign = false;
+        return json({ ok: true, candidates: candidates.length, redesign });
+      },
+    },
+    "/api/redesign": {
+      GET: () => json({ on: redesign }),
+      POST: async (req) => {
+        redesign = (await req.json()).on === true;
+        return json({ on: redesign });
+      },
+    },
     "/api/candidates": {
       GET: () => json(candidates),
       POST: async (req) => {
