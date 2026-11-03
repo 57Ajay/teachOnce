@@ -7,6 +7,7 @@ import time
 import traceback
 from datetime import datetime
 
+import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -237,6 +238,21 @@ def start_run(body: RunIn):
 
     threading.Thread(target=work, daemon=True).start()
     return {"run_id": run_id}
+
+
+class RedesignIn(BaseModel):
+    on: bool
+
+
+@app.api_route("/app/api/hire-redesign", methods=["GET", "POST"])
+def hire_redesign(body: RedesignIn | None = None):
+    """The header's Hire redesign toggle: the browser can't call the test site (another origin), so the app relays."""
+    url = f"{config.TEST_SITE_URL}/api/redesign"
+    try:
+        r = httpx.post(url, json={"on": body.on}, timeout=5) if body else httpx.get(url, timeout=5)
+        return r.raise_for_status().json() | {"available": True}
+    except httpx.HTTPError:
+        return {"on": False, "available": False}
 
 
 @app.get("/app/runs/{run_id}")

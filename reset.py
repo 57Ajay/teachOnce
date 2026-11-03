@@ -27,7 +27,7 @@ def reset():
         print(f"portal: not reachable at {config.PORTAL_URL}; it starts at level 0 anyway")
     try:
         r = httpx.post(f"{config.TEST_SITE_URL}/api/reset", timeout=5).raise_for_status().json()
-        print(f"test site: {r['candidates']} candidates, no interviews")
+        print(f"test site: {r['candidates']} candidates, no interviews, redesign off")
     except httpx.HTTPError:
         print(f"test site: not running at {config.TEST_SITE_URL}; it starts from its seed data anyway")
     runs = sorted(config.RUNS_DIR.glob("*/")) if config.RUNS_DIR.exists() else []

@@ -48,3 +48,9 @@ def test_run_started_from_the_dashboard_streams_its_events(base_url, tmp_path, m
     assert resumed[1::2] == events[10:]
     assert httpx.get(f"{base_url}/app/runs/{run_id}/steps/000_s01.png").headers["content-type"] == "image/png"
     assert httpx.get(f"{base_url}/app/runs/{run_id}/steps/..%2Fsummary.json").status_code == 404
+
+
+def test_hire_redesign_toggle_says_when_the_test_site_is_down(base_url, monkeypatch):
+    monkeypatch.setattr(config, "TEST_SITE_URL", "http://127.0.0.1:9")
+    assert httpx.get(f"{base_url}/app/api/hire-redesign").json() == {"on": False, "available": False}
+    assert httpx.post(f"{base_url}/app/api/hire-redesign", json={"on": True}).json()["available"] is False
