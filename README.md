@@ -66,7 +66,18 @@ Compiling a 60–100 s recording takes 40–150 s and $0.22–0.45.
 | Remove a candidate (medium): search, row menu, confirm dialog | 8 | 63 s, $0.19, first try | **6/6 rows, 0 model calls, ~1.3 s per row** |
 | Schedule an interview (hard): three-step wizard with radio cards, a date, a custom dropdown and a switch; outputs the interview ID | 16 | 89 s, $0.26, first try | **8/8 rows, 0 model calls, ~1.8 s per row** |
 
-These recordings were driven by a script in a headless sandbox (no narration); the site's data was checked after the runs. Two recordings made by hand on a laptop, which search by part of a name and click the result instead, compiled and ran the same way: remove 6/6 rows (50 s, $0.16 to compile), schedule 8/8 rows (113 s, $0.43, one repair round for the interview-ID pattern), 0 model calls. Healing is shown on the portal: it is the site we redesign on demand.
+These recordings were driven by a script in a headless sandbox (no narration); the site's data was checked after the runs. Two recordings made by hand on a laptop, which search by part of a name and click the result instead, compiled and ran the same way: remove 6/6 rows (50 s, $0.16 to compile), schedule 8/8 rows (113 s, $0.43, one repair round for the interview-ID pattern), 0 model calls.
+
+**Demoland Hire ships a redesign mid-run.** The site has a redesign switch (Settings, or *Hire redesign* in the Teach-Once header): a new look, a cookie banner on every page, the menu item Candidates renamed Talent pool, reworded labels and buttons (Sign in → Log in, Save candidate → Create candidate, Remove → Delete, Schedule interview → Book interview...), the job opening as a custom dropdown and the interviewer dropdown as radio cards. Each task ran on its CSV with the redesign switched on after row 2 (one run each, recompiled from new scripted teaches):
+
+| Task | Rows | Heals | Model calls | Heal cost | Run time | Rows after the heal |
+|---|---|---|---|---|---|---|
+| Add a candidate | **8/8** | 4 | 13 | $0.064 | 101 s | 1.7–2.1 s, 0 model calls |
+| Remove a candidate | **6/6** | 5 | 14 | $0.078 | 137 s | ~2.0 s, 0 model calls |
+| Remove via the profile (search part of a name, click it) | **6/6** | 5 | 13 | $0.084 | 158 s | 1.6–2.1 s, 0 model calls |
+| Schedule an interview | **8/8** | 6 | 18 | $0.108 | 191 s | 1.9–2.4 s, 0 model calls |
+
+The healed versions then ran every row on both designs with 0 model calls. Getting there took three healer fixes, found by these runs: a placeholder fallback that matched the wrong field (the first add run went 2/8 for $0.12), a learned cookie banner that was dropped and paid for twice, and an extra wizard click that cost 1.5 s per row. [DOCS.md](DOCS.md#redesign-switch) has the details and what the redesign leaves out (it doesn't move fields between wizard steps).
 
 ## Quick start
 
@@ -85,9 +96,9 @@ Open **http://localhost:8000/app/** in Chrome. Everything happens in the browser
 1. **Teach**: click *Teach a new task*, then *Start teaching*; share the tab and the microphone, do the task in the portal (demo login `operator` / `demo123`) while narrating, and click *Stop*.
 2. **Compile**: on the recording page, click *Compile workflow* and watch Voice Transcribe, Spark and Wonder work.
 3. **Run**: click *▶ Run 50 rows* (fake rows are generated for you).
-4. **Redesign**: while it runs, press *Portal redesign* 1, 2, 3 or *🎲 Random* in the header. Watch the heal cards, the new version, and the cost meter against the agent. Try *+ required field* or *Block bots* to see it stop and say why.
+4. **Redesign**: while it runs, press *Portal redesign* 1, 2, 3 or *🎲 Random* in the header. Watch the heal cards, the new version, and the cost meter against the agent. Try *+ required field* or *Block bots* to see it stop and say why. For a Demoland Hire task, press *Hire redesign* instead.
 
-`uv run reset.py` puts the demo back to the start: original site, no runs, workflows as they were taught. Recordings are kept.
+`uv run reset.py` puts the demo back to the start: original sites (portal level 0, Hire redesign off), no runs, workflows as they were taught. Recordings are kept.
 
 **Teach on a modern web app** (needs [Bun](https://bun.sh) and a display; narration uses the default microphone). Start Demoland Hire, then teach one of its tasks (login `recruiter@demoland.test` / `hire-demo-2026`, also shown on the page):
 
@@ -136,6 +147,7 @@ Any other site works the same way (`uv run teach_live.py <url> --csv <rows.csv>`
 - Teach-Once does not get around bot detection or CAPTCHAs. When a site blocks automation it stops and tells you; an AI agent would be blocked the same way, at a higher cost.
 - Data the rows don't have can't be invented: a new mandatory field stops the run until you add a column or teach again.
 - A popup learned by a heal is dismissed by its button's name; a very generic name ("Continue") could match another button.
+- A multi-step form on one URL whose redesign moves a field to another step, or reorders the steps, is not handled reliably: its Next buttons often share one name, and the healer's reordering can put them next to each other. Demoland Hire's redesign leaves its wizard's steps as they are.
 - The studio needs a Chromium-based browser (tab capture) and only frames the portal; other sites are taught with `teach_live.py`, which needs a display and records one tab.
 - On real sites, fields are found by role, label (also unlinked labels next to the field), placeholder or id. A field with none of these unique can't be located.
 
