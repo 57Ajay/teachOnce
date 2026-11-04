@@ -4,6 +4,8 @@
 
 ▶ **Demo video (2:44):** https://youtu.be/pElnxe50ADQ
 
+![A 50-row run on the demo portal: the portal ships a redesign mid-run, one row heals, and every later row runs with zero model calls](assets/run-and-heal.gif)
+
 Browser agents that ask a model what to do on every click are slow, expensive and unreliable at volume. Measured on the same task, a computer-use agent needed 27 model calls, $0.30 and almost 7 minutes per row, and finished 7 rows out of 10. Teach-Once runs the same row in about a second with no model calls. It only calls a model when the site has changed, and the fix it finds is reused by every row after it.
 
 1. **Teach**: do the task once in your browser while saying what you're doing.
@@ -35,6 +37,20 @@ flowchart LR
 
 Spark decides *which* element is meant; SAM shows *exactly where* it is. Neither is asked to do the other's job: SAM finds controls by how they look, not by their labels.
 
+### What it looks like
+
+**Teach and compile.** Do the task once in the studio while narrating, then compile: Voice Transcribe, Muse Spark, Muse Wonder and a dry run.
+
+![Teaching the portal task in the studio, then compiling it](assets/teach-and-compile.gif)
+
+**What Muse Spark understood.** The steps of the recording, and which values change on every row (green chips become CSV columns).
+
+![Muse Spark's step table with per-row variables](assets/compile-spark.png)
+
+**A heal card.** The page the runner saw, SAM 3.1's masks on the controls Spark picked, and every step's old and new locator.
+
+![A heal card: screenshot, SAM 3.1 masks and the workflow diff](assets/heal-card.png)
+
 ## Results
 
 All measured on the demo portal ([DOCS.md](DOCS.md) has the details).
@@ -58,6 +74,12 @@ Compiling a 60–100 s recording takes 40–150 s and $0.22–0.45.
 | **20 random redesigns** (two-page forms, custom dropdowns, removed fields, popups, reworded everything...) | **20/20 recovered**, 100/100 rows, $0.055 per redesign |
 | A new mandatory field the rows have no data for; access blocked | **Stopped with the reason**, 2/2, one Spark call each |
 
+![The portal before and after redesign level 3](assets/portal-redesign.png)
+
+When the site blocks automated access, the run stops after one Spark call and says why. It never tries to get around a block:
+
+![A run stopped because the portal blocks automated access](assets/stopped.png)
+
 ### Three tasks on a modern web app
 
 **Demoland Hire** (`test-site/`, Bun + React + TypeScript) is a fictional recruiting app with the controls modern sites use: client-side routing, a search-as-you-type list, row menus, a confirm dialog, radio cards, a segmented control, a custom dropdown, a toggle switch, a three-step wizard. Three tasks, taught with `teach_live.py`, each compiled once and run on its CSV:
@@ -80,6 +102,12 @@ These recordings were driven by a script in a headless sandbox (no narration); t
 | Schedule an interview | **8/8** | 6 | 18 | $0.108 | 191 s | 1.9–2.4 s, 0 model calls |
 
 The healed versions then ran every row on both designs with 0 model calls. Getting there took three healer fixes, found by these runs: a placeholder fallback that matched the wrong field (the first add run went 2/8 for $0.12), a learned cookie banner that was dropped and paid for twice, and an extra wizard click that cost 1.5 s per row. [DOCS.md](DOCS.md#redesign-switch) has the details and what the redesign leaves out (it doesn't move fields between wizard steps).
+
+![Demoland Hire's interview wizard before and after its redesign](assets/hire-redesign.png)
+
+From the demo video (a recording made by hand on a laptop, Hire redesign switched on after row 2): 8/8 rows, 6 heals, 17 model calls, $0.076.
+
+![The schedule-interview task on Demoland Hire, healing through the app's redesign mid-run](assets/react-app-redesign.gif)
 
 ## Quick start
 
@@ -136,6 +164,7 @@ Any other site works the same way (`uv run teach_live.py <url> --csv <rows.csv>`
 | `static/recorder.js`, `recording.py` | The teach studio and what it records. |
 | `teach_live.py`, `static/live.js` | The recorder for any website. |
 | `test-site/` | Demoland Hire: a fictional recruiting app (Bun + React + TypeScript) with three demo tasks. |
+| `assets/` | Screenshots and GIFs used in this README (from the demo video). |
 | `teach.py`, `understand.py`, `compiler.py` | Recording → Voice Transcribe → Muse Spark → Muse Wonder → lint → dry run → export. |
 | `workflow.py`, `locate.py`, `run.py` | The workflow format and the interpreter that runs it. |
 | `heal.py`, `sam.py` | Self-healing with Muse Spark and SAM 3.1. |
