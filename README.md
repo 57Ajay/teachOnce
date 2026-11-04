@@ -2,6 +2,8 @@
 
 **Teach a web task once. Run it on every row of a spreadsheet with zero model calls. When the site changes, it heals itself.**
 
+▶ **Demo video (2:44):** https://youtu.be/pElnxe50ADQ
+
 Browser agents that ask a model what to do on every click are slow, expensive and unreliable at volume. Measured on the same task, a computer-use agent needed 27 model calls, $0.30 and almost 7 minutes per row, and finished 7 rows out of 10. Teach-Once runs the same row in about a second with no model calls. It only calls a model when the site has changed, and the fix it finds is reused by every row after it.
 
 1. **Teach**: do the task once in your browser while saying what you're doing.
